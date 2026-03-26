@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TemporalMind — Time Series Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════
+   DESIGN SYSTEM  —  Refined Scientific Dark
+   ═══════════════════════════════════════════════ */
+:root {
+  --bg:      #07090f;
+  --bg1:     #0c1019;
+  --bg2:     #111827;
+  --bg3:     #1a2333;
+  --border:  #1f2d42;
+  --border2: #2d4060;
+  --tx:      #e8f0fe;
+  --tx2:     #8faec8;
+  --tx3:     #3d5a7a;
+  --a1:  #3b82f6;   /* blue  */
+  --a2:  #f97316;   /* amber */
+  --a3:  #10b981;   /* green */
+  --a4:  #8b5cf6;   /* violet */
+  --a5:  #ef4444;   /* red   */
+  --a6:  #06b6d4;   /* cyan  */
+  --r:   8px;
+  --r2:  12px;
+  --r3:  16px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg);
+  color: var(--tx);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* subtle dot grid */
+body::before {
+  content:'';position:fixed;inset:0;
+  background-image: radial-gradient(circle, rgba(59,130,246,0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events:none; z-index:0;
+}
+
+/* ── HEADER ─────────────────────────────────── */
+header {
+  position:relative; z-index:10;
+  background: rgba(12,16,25,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 60px;
+}
+.logo {
+  display:flex;align-items:center;gap:10px;
+  font-family:'Instrument Serif',serif; font-size:22px; letter-spacing:0.3px;
+}
+.logo-mark {
+  width:34px;height:34px; border-radius:8px;
+  background:linear-gradient(135deg,var(--a1),var(--a4));
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;
+}
+.logo em { color:var(--a1); font-style:normal; }
+.header-right { display:flex;gap:8px;align-items:center; }
+.chip {
+  font-family:'IBM Plex Mono',monospace; font-size:10px;
+  padding:3px 10px; border-radius:20px; border:1px solid;
+  letter-spacing:0.8px;
+}
+.chip-blue  { color:var(--a1);border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.07); }
+.chip-green { color:var(--a3);border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.07); }
+.chip-amber { color:var(--a2);border-color:rgba(249,115,22,0.3);background:rgba(249,115,22,0.07); }
+
+/* ── TABS ───────────────────────────────────── */
+.tabs-wrapper {
+  position: relative; z-index:9;
+  background:var(--bg1);
+  border-bottom: 1px solid var(--border);
+  display:flex; padding: 0 32px; gap:2px;
+}
+.tab-btn {
+  padding: 14px 22px;
+  font-family:'Outfit',sans-serif; font-size:13px; font-weight:500;
+  background:transparent; border:none; color:var(--tx3);
+  cursor:pointer; position:relative; letter-spacing:0.3px;
+  transition: color 0.2s;
+  display:flex;align-items:center;gap:8px;
+}
+.tab-btn .tab-num {
+  width:20px;height:20px;border-radius:50%;
+  border:1px solid var(--tx3);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace; font-size:10px;
+  transition: all 0.2s;
+}
+.tab-btn:hover { color:var(--tx2); }
+.tab-btn.active { color:var(--tx); }
+.tab-btn.active .tab-num {
+  background:var(--a1);border-color:var(--a1);color:#fff;
+}
+.tab-btn::after {
+  content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px;
+  background:var(--a1); transform:scaleX(0); transition:transform 0.2s;
+}
+.tab-btn.active::after { transform:scaleX(1); }
+
+/* ── MAIN LAYOUT ────────────────────────────── */
+main {
+  position:relative; z-index:1;
+  max-width:1400px; margin:0 auto; padding:32px;
+}
+.tab-panel { display:none; }
+.tab-panel.active { display:block; animation: fadeUp 0.3s ease; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── CARDS ──────────────────────────────────── */
+.card {
+  background:var(--bg1); border:1px solid var(--border);
+  border-radius:var(--r3); padding:24px;
+  position:relative; overflow:hidden;
+}
+.card::before {
+  content:''; position:absolute; top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(59,130,246,0.3),transparent);
+}
+.card-title {
+  font-family:'Outfit',sans-serif; font-size:14px; font-weight:600;
+  color:var(--tx2); letter-spacing:0.5px; text-transform:uppercase;
+  margin-bottom:16px;
+  display:flex;align-items:center;gap:8px;
+}
+.card-title-icon { font-size:16px; }
+
+/* ── GRID HELPERS ───────────────────────────── */
+.grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:20px; }
+.grid-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px; }
+.grid-4 { display:grid;grid-template-columns:repeat(4,1fr);gap:16px; }
+
+/* ── UPLOAD ZONE ────────────────────────────── */
+.upload-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--r3);
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg2);
+  position:relative; overflow:hidden;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color:var(--a1); background:rgba(59,130,246,0.05);
+}
+.upload-zone input[type=file] {
+  position:absolute;inset:0;opacity:0;cursor:pointer;
+}
+.upload-icon { font-size:52px;margin-bottom:16px;display:block; }
+.upload-title {
+  font-family:'Instrument Serif',serif; font-size:24px;
+  margin-bottom:8px;
+}
+.upload-sub { font-size:13px;color:var(--tx2);line-height:1.6; }
+.upload-formats { margin-top:12px;display:flex;gap:8px;justify-content:center; }
+
+/* ── BUTTONS ────────────────────────────────── */
+.btn {
+  display:inline-flex;align-items:center;gap:8px;
+  padding:9px 20px; border-radius:8px; font-size:13px; font-weight:500;
+  border:none; cursor:pointer; transition:all 0.15s; letter-spacing:0.2px;
+  font-family:'Outfit',sans-serif;
+}
+.btn-primary {
+  background:var(--a1); color:#fff;
+}
+.btn-primary:hover { background:#2563eb; transform:translateY(-1px); box-shadow:0 4px 16px rgba(59,130,246,0.3); }
+.btn-secondary {
+  background:var(--bg3); color:var(--tx2); border:1px solid var(--border);
+}
+.btn-secondary:hover { border-color:var(--border2);color:var(--tx); }
+.btn-success { background:var(--a3);color:#fff; }
+.btn-success:hover { background:#059669; }
+.btn-ghost { background:transparent;color:var(--tx2);border:1px solid var(--border); }
+.btn-ghost:hover { border-color:var(--a1);color:var(--a1); }
+.btn-sm { padding:6px 14px;font-size:12px; }
+.btn-lg { padding:12px 28px;font-size:14px; }
+.btn[disabled] { opacity:0.4;pointer-events:none; }
+
+/* ── FORM CONTROLS ──────────────────────────── */
+.form-group { margin-bottom:16px; }
+.form-label {
+  display:block; font-size:12px; font-weight:600;
+  color:var(--tx2); letter-spacing:0.5px; margin-bottom:6px;
+  text-transform:uppercase;
+}
+.form-control {
+  width:100%; padding:9px 14px;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r); color:var(--tx); font-size:13px;
+  font-family:'Outfit',sans-serif;
+  transition:border-color 0.15s;
+}
+.form-control:focus { outline:none; border-color:var(--a1); }
+.form-control option { background:var(--bg2); }
+select.form-control { cursor:pointer; }
+
+/* ── TABLE ──────────────────────────────────── */
+.tbl-wrap { overflow-x:auto; border-radius:var(--r2); border:1px solid var(--border); }
+table { width:100%;border-collapse:collapse;font-size:12px; }
+thead tr { background:var(--bg2); }
+th {
+  padding:10px 14px; text-align:left;
+  font-family:'IBM Plex Mono',monospace; font-size:11px;
+  color:var(--tx2); font-weight:500; letter-spacing:0.5px;
+  border-bottom:1px solid var(--border); white-space:nowrap;
+}
+td {
+  padding:9px 14px; border-bottom:1px solid rgba(31,45,66,0.6);
+  color:var(--tx2); font-family:'IBM Plex Mono',monospace;
+  white-space:nowrap;
+}
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:rgba(59,130,246,0.04); color:var(--tx); }
+.td-tag {
+  display:inline-block; padding:2px 8px; border-radius:4px;
+  font-size:10px; letter-spacing:0.5px;
+}
+.tag-ts     { background:rgba(6,182,212,0.15);color:var(--a6); }
+.tag-value  { background:rgba(16,185,129,0.15);color:var(--a3); }
+.tag-hier   { background:rgba(139,92,246,0.15);color:var(--a4); }
+.tag-other  { background:rgba(31,45,66,0.8);color:var(--tx3); }
+.tag-model  { background:rgba(59,130,246,0.15);color:var(--a1); }
+.tag-train  { background:rgba(16,185,129,0.15);color:var(--a3); }
+.tag-val    { background:rgba(249,115,22,0.15);color:var(--a2); }
+.tag-test   { background:rgba(239,68,68,0.15);color:var(--a5); }
+
+/* ── STAT CARDS ─────────────────────────────── */
+.stat-card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r2); padding:18px;
+}
+.stat-val {
+  font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:500;
+  margin-bottom:4px; color:var(--tx);
+}
+.stat-label { font-size:11px; color:var(--tx3); letter-spacing:0.5px; text-transform:uppercase; }
+.stat-sub   { font-size:12px; color:var(--tx2); margin-top:4px; }
+
+/* ── PROGRESS / STEP ────────────────────────── */
+.steps-bar {
+  display:flex; gap:0; margin-bottom:28px;
+  border:1px solid var(--border); border-radius:var(--r2); overflow:hidden;
+}
+.step-item {
+  flex:1; padding:12px 16px; text-align:center;
+  font-size:12px; color:var(--tx3); cursor:pointer;
+  border-right:1px solid var(--border); transition:all 0.2s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--bg2);
+}
+.step-item:last-child { border-right:none; }
+.step-item.active { background:rgba(59,130,246,0.1);color:var(--a1); }
+.step-item.done   { background:rgba(16,185,129,0.08);color:var(--a3); }
+.step-dot {
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace; font-size:10px;
+  border:1px solid; flex-shrink:0;
+}
+.step-item .step-dot { border-color:var(--tx3); color:var(--tx3); }
+.step-item.active .step-dot { border-color:var(--a1); color:var(--a1); }
+.step-item.done .step-dot { background:var(--a3); border-color:var(--a3); color:#fff; }
+
+/* ── STRENGTH BAR ───────────────────────────── */
+.strength-bar-wrap { margin-bottom:12px; }
+.strength-label {
+  display:flex;justify-content:space-between;
+  font-size:12px;color:var(--tx2); margin-bottom:4px;
+}
+.strength-track {
+  height:6px; background:var(--bg3); border-radius:3px; overflow:hidden;
+}
+.strength-fill {
+  height:100%; border-radius:3px;
+  transition:width 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+.fill-blue  { background:var(--a1); }
+.fill-green { background:var(--a3); }
+.fill-amber { background:var(--a2); }
+.fill-violet{ background:var(--a4); }
+.fill-red   { background:var(--a5); }
+
+/* ── ALERT / NOTICE ─────────────────────────── */
+.alert {
+  padding:12px 16px; border-radius:var(--r); font-size:13px;
+  display:flex;gap:10px;align-items:flex-start; margin-bottom:16px;
+}
+.alert-info  { background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:var(--a1); }
+.alert-warn  { background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);color:var(--a2); }
+.alert-ok    { background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:var(--a3); }
+.alert-err   { background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:var(--a5); }
+
+/* ── CHART CONTAINER ────────────────────────── */
+.chart-wrap {
+  position:relative; background:var(--bg2);
+  border:1px solid var(--border); border-radius:var(--r2);
+  padding:16px;
+}
+.chart-title {
+  font-size:12px;font-weight:600;color:var(--tx2);
+  letter-spacing:0.5px;text-transform:uppercase;margin-bottom:14px;
+}
+canvas { display:block; }
+
+/* ── COLUMN MAPPER ──────────────────────────── */
+.col-mapper { display:flex;flex-direction:column;gap:8px; }
+.col-row {
+  display:grid;grid-template-columns:1fr 140px 160px;gap:10px;
+  align-items:center; padding:8px 12px;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r);
+}
+.col-name { font-family:'IBM Plex Mono',monospace; font-size:12px; }
+
+/* ── TOGGLE SWITCH ──────────────────────────── */
+.toggle-group { display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2); }
+.toggle {
+  position:relative;display:inline-block;width:40px;height:22px;
+}
+.toggle input { opacity:0;width:0;height:0; }
+.toggle-slider {
+  position:absolute;inset:0;background:var(--bg3);border-radius:11px;
+  cursor:pointer;transition:0.3s;border:1px solid var(--border);
+}
+.toggle-slider::before {
+  content:'';position:absolute;left:3px;top:2px;
+  width:16px;height:16px;background:var(--tx3);border-radius:50%;transition:0.3s;
+}
+.toggle input:checked + .toggle-slider { background:rgba(59,130,246,0.2);border-color:var(--a1); }
+.toggle input:checked + .toggle-slider::before { transform:translateX(18px);background:var(--a1); }
+
+/* ── RANGE SLIDER ───────────────────────────── */
+input[type=range] {
+  width:100%;accent-color:var(--a1);cursor:pointer;
+}
+
+/* ── LOADER ─────────────────────────────────── */
+.loader-wrap { display:flex;align-items:center;gap:12px;padding:20px 0; }
+.spinner {
+  width:20px;height:20px;border:2px solid var(--border);
+  border-top-color:var(--a1);border-radius:50%;
+  animation:spin 0.7s linear infinite; flex-shrink:0;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+.loader-text { font-size:13px;color:var(--tx2); }
+
+/* ── DIVIDER ────────────────────────────────── */
+.divider { height:1px;background:var(--border);margin:20px 0; }
+
+/* ── SECTION HEADING ────────────────────────── */
+.section-h {
+  font-family:'Instrument Serif',serif; font-size:26px;
+  margin-bottom:6px; letter-spacing:-0.3px;
+}
+.section-h em { color:var(--a1); font-style:normal; }
+.section-sub { font-size:13px;color:var(--tx2);margin-bottom:24px;line-height:1.6; }
+
+/* ── RADIO PILL ─────────────────────────────── */
+.radio-pills { display:flex;flex-wrap:wrap;gap:8px; }
+.radio-pill input { display:none; }
+.radio-pill label {
+  padding:6px 16px; border-radius:20px;
+  border:1px solid var(--border); font-size:12px;
+  color:var(--tx2); cursor:pointer; transition:all 0.15s;
+  font-family:'IBM Plex Mono',monospace;
+}
+.radio-pill input:checked + label {
+  background:rgba(59,130,246,0.12);border-color:var(--a1);color:var(--a1);
+}
+.radio-pill label:hover { border-color:var(--border2);color:var(--tx); }
+
+/* ── ANALYSIS METRIC GRID ───────────────────── */
+.metric-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px; }
+.metric-card {
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r2);padding:16px;
+}
+.metric-val {
+  font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:500;
+  margin-bottom:4px;
+}
+.metric-key { font-size:11px;color:var(--tx3);letter-spacing:0.8px;text-transform:uppercase; }
+.metric-note{ font-size:11px;color:var(--tx2);margin-top:4px; }
+
+/* ── STEP PANEL ─────────────────────────────── */
+.step-panel { display:none; }
+.step-panel.active { display:block; }
+
+/* ── MINI LEGEND ────────────────────────────── */
+.legend { display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px; }
+.legend-item { display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2); }
+.legend-dot { width:10px;height:10px;border-radius:50%; }
+
+/* scrollbar */
+::-webkit-scrollbar { width:6px;height:6px; }
+::-webkit-scrollbar-track { background:var(--bg1); }
+::-webkit-scrollbar-thumb { background:var(--border2);border-radius:3px; }
+
+/* ── RESPONSIVE ─────────────────────────────── */
+@media(max-width:900px) {
+  .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
+  main { padding:16px; }
+}
+
+/* ── TOAST ──────────────────────────────────── */
+#toast-container {
+  position:fixed;bottom:24px;right:24px;z-index:9999;
+  display:flex;flex-direction:column;gap:8px;
+}
+.toast {
+  padding:12px 18px;border-radius:8px;font-size:13px;
+  background:var(--bg3);border:1px solid var(--border);color:var(--tx);
+  box-shadow:0 4px 24px rgba(0,0,0,0.4);
+  animation:toastIn 0.25s ease;max-width:340px;
+}
+@keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+.toast.ok   { border-color:rgba(16,185,129,0.4);color:var(--a3); }
+.toast.err  { border-color:rgba(239,68,68,0.4);color:var(--a5); }
+.toast.info { border-color:rgba(59,130,246,0.4);color:var(--a1); }
+
+/* ── DOWNLOAD BUTTON GLOW ───────────────────── */
+.btn-download {
+  background:linear-gradient(135deg,var(--a1),var(--a4));
+  color:#fff;border:none;font-weight:600;
+}
+.btn-download:hover { box-shadow:0 4px 20px rgba(59,130,246,0.4);transform:translateY(-1px); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">⧖</div>
+    Temporal<em>Mind</em>
+  </div>
+  <div class="header-right">
+    <span class="chip chip-blue">v1.0</span>
+    <span class="chip chip-green" id="api-status">● CONNECTING</span>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs-wrapper">
+  <button class="tab-btn active" onclick="switchTab(0)" id="tab-0">
+    <span class="tab-num">1</span> Upload Data
+  </button>
+  <button class="tab-btn" onclick="switchTab(1)" id="tab-1">
+    <span class="tab-num">2</span> Time Series Analyzer
+  </button>
+  <button class="tab-btn" onclick="switchTab(2)" id="tab-2">
+    <span class="tab-num">3</span> Prepare Data
+  </button>
+</div>
+
+<main>
+
+<!-- ══════════════════════════════════════════════
+     TAB 1 — UPLOAD DATA
+══════════════════════════════════════════════ -->
+<div class="tab-panel active" id="panel-0">
+  <div class="section-h">Upload <em>Dataset</em></div>
+  <p class="section-sub">Upload a CSV or Excel file. TemporalMind will auto-detect your time column, value series, and hierarchy structure.</p>
+
+  <div class="grid-2" style="gap:24px;align-items:start">
+
+    <!-- Left: upload + confirm -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <!-- Drop zone -->
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileSelect(event)">
+        <span class="upload-icon">📂</span>
+        <div class="upload-title">Drop file here or <span style="color:var(--a1)">browse</span></div>
+        <div class="upload-sub">Supports CSV, Excel (.xlsx, .xls) · Max 50 MB<br>Single series or hierarchical multi-level data</div>
+        <div class="upload-formats">
+          <span class="chip chip-blue">CSV</span>
+          <span class="chip chip-green">XLSX</span>
+          <span class="chip chip-amber">XLS</span>
+        </div>
+      </div>
+
+      <!-- Schema confirm (hidden until upload) -->
+      <div class="card" id="schema-confirm-card" style="display:none">
+        <div class="card-title"><span class="card-title-icon">🗂</span> Column Mapping</div>
+        <div id="schema-detect-msg" class="alert alert-info" style="display:none"></div>
+
+        <div class="col-mapper" id="col-mapper-body"></div>
+
+        <div style="margin-top:20px;display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="confirmSchema()">✓ Confirm &amp; Ingest</button>
+          <button class="btn btn-secondary" onclick="resetUpload()">↺ Reset</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: info panels -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <div class="card" id="upload-info-card">
+        <div class="card-title"><span class="card-title-icon">ℹ</span> How it works</div>
+        <div style="font-size:13px;color:var(--tx2);line-height:1.8">
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:var(--a1);font-family:'IBM Plex Mono',monospace;font-size:11px">01</span> Upload CSV/Excel — any structure</div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:var(--a1);font-family:'IBM Plex Mono',monospace;font-size:11px">02</span> System detects timestamp, value &amp; hierarchy columns</div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:var(--a1);font-family:'IBM Plex Mono',monospace;font-size:11px">03</span> Confirm or adjust column assignments</div>
+          <div style="display:flex;gap:10px;margin-bottom:10px"><span style="color:var(--a1);font-family:'IBM Plex Mono',monospace;font-size:11px">04</span> Proceed to analyze or prepare data</div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-2">
+          <div>
+            <div style="font-size:11px;color:var(--tx3);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px">Single Series</div>
+            <div style="font-size:12px;color:var(--tx2);font-family:'IBM Plex Mono',monospace">date, value</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--tx3);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px">Hierarchy</div>
+            <div style="font-size:12px;color:var(--tx2);font-family:'IBM Plex Mono',monospace">date, region, store, sku, qty</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data preview -->
+      <div class="card" id="preview-card" style="display:none">
+        <div class="card-title"><span class="card-title-icon">👁</span> Data Preview</div>
+        <div id="preview-stats" class="grid-4" style="margin-bottom:16px"></div>
+        <div class="tbl-wrap" id="preview-table-wrap" style="max-height:280px;overflow-y:auto"></div>
+      </div>
+
+      <!-- Schema result -->
+      <div class="card" id="schema-result-card" style="display:none">
+        <div class="card-title"><span class="card-title-icon">✓</span> Schema Confirmed</div>
+        <div id="schema-result-body"></div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="switchTab(1)">→ Analyze</button>
+          <button class="btn btn-secondary" onclick="switchTab(2)">⚙ Prepare Data</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     TAB 2 — TIME SERIES ANALYZER
+══════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-1">
+  <div class="section-h">Time Series <em>Analyzer</em></div>
+  <p class="section-sub">Full decomposition, stationarity tests, outlier analysis, and intermittency classification.</p>
+
+  <!-- Controls bar -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
+      <div class="form-group" style="flex:1;min-width:160px;margin:0">
+        <label class="form-label">Series / Column</label>
+        <select class="form-control" id="analyze-series-select"></select>
+      </div>
+      <div class="form-group" style="flex:0 0 140px;margin:0">
+        <label class="form-label">Seasonal Period</label>
+        <input type="number" class="form-control" id="analyze-period" placeholder="Auto" min="2" max="365">
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="runAnalysis()">▶ Run Analysis</button>
+    </div>
+  </div>
+
+  <!-- Not ready notice -->
+  <div class="alert alert-info" id="analyze-no-data">
+    ⬆ Please upload and confirm a dataset in Tab 1 first.
+  </div>
+
+  <!-- Results (hidden until run) -->
+  <div id="analyze-results" style="display:none">
+
+    <!-- Row 1: stat cards -->
+    <div class="grid-4" id="analyze-stats-row" style="margin-bottom:20px"></div>
+
+    <!-- Row 2: main chart + strength bars -->
+    <div class="grid-2" style="gap:20px;margin-bottom:20px">
+      <div class="chart-wrap" style="grid-column:1">
+        <div class="chart-title">Original Series</div>
+        <div class="legend" id="main-chart-legend"></div>
+        <canvas id="main-chart" height="220"></canvas>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:16px">
+        <div class="card-title"><span class="card-title-icon">📊</span> Component Strengths</div>
+        <div id="strength-bars"></div>
+        <div class="divider"></div>
+        <div class="card-title"><span class="card-title-icon">🏷</span> Model Recommendation</div>
+        <div id="model-rec-box"></div>
+      </div>
+    </div>
+
+    <!-- Row 3: decomposition charts -->
+    <div class="grid-2" style="gap:20px;margin-bottom:20px">
+      <div class="chart-wrap">
+        <div class="chart-title">Trend Component</div>
+        <canvas id="trend-chart" height="160"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Seasonal Component</div>
+        <canvas id="seasonal-chart" height="160"></canvas>
+      </div>
+    </div>
+    <div class="grid-2" style="gap:20px;margin-bottom:20px">
+      <div class="chart-wrap">
+        <div class="chart-title">Cycle (HP Filter)</div>
+        <canvas id="cycle-chart" height="160"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Residual</div>
+        <canvas id="residual-chart" height="160"></canvas>
+      </div>
+    </div>
+
+    <!-- Row 4: detail tables -->
+    <div class="grid-2" style="gap:20px;margin-bottom:20px">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">🔬</span> Stationarity Tests</div>
+        <div id="stat-tests-body"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">⚡</span> Outlier Summary</div>
+        <div id="outlier-summary-body"></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="gap:20px">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">💤</span> Intermittency Analysis</div>
+        <div id="intermittency-body"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">🕳</span> Missing Values</div>
+        <div id="missing-body"></div>
+      </div>
+    </div>
+
+  </div>
+  <div id="analyze-loader" style="display:none" class="loader-wrap">
+    <div class="spinner"></div><span class="loader-text">Running analysis pipeline…</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     TAB 3 — PREPARE DATA
+══════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-2">
+  <div class="section-h">Prepare <em>Data</em></div>
+  <p class="section-sub">Step-by-step pipeline to transform raw data into forecast-ready features.</p>
+
+  <!-- Progress steps -->
+  <div class="steps-bar" id="prep-steps-bar">
+    <div class="step-item active" onclick="goPrepStep(0)" id="pstep-0"><div class="step-dot">1</div>Interval</div>
+    <div class="step-item" onclick="goPrepStep(1)" id="pstep-1"><div class="step-dot">2</div>Hierarchy</div>
+    <div class="step-item" onclick="goPrepStep(2)" id="pstep-2"><div class="step-dot">3</div>Missing Values</div>
+    <div class="step-item" onclick="goPrepStep(3)" id="pstep-3"><div class="step-dot">4</div>Outliers</div>
+    <div class="step-item" onclick="goPrepStep(4)" id="pstep-4"><div class="step-dot">5</div>Aggregation</div>
+    <div class="step-item" onclick="goPrepStep(5)" id="pstep-5"><div class="step-dot">6</div>Prepare</div>
+  </div>
+
+  <!-- No data notice -->
+  <div class="alert alert-info" id="prep-no-data">
+    ⬆ Please upload and confirm a dataset in Tab 1 first.
+  </div>
+
+  <div id="prep-content" style="display:none">
+
+    <!-- STEP 0: Interval -->
+    <div class="step-panel active" id="prep-step-0">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">🕐</span> Select Analysis Interval</div>
+        <p style="font-size:13px;color:var(--tx2);margin-bottom:20px">The Interval Advisor uses FFT and SNR analysis to recommend the best temporal resolution for your data.</p>
+        <button class="btn btn-primary" onclick="runIntervalAdvice()" id="interval-advice-btn">🔍 Get Recommendations</button>
+        <div id="interval-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Analysing frequency…</span></div>
+        <div id="interval-results" style="display:none;margin-top:20px">
+          <div id="interval-recs-grid" class="grid-3" style="margin-bottom:20px"></div>
+          <div class="form-group">
+            <label class="form-label">Override Interval (optional)</label>
+            <div class="radio-pills" id="interval-pills"></div>
+          </div>
+          <div id="interval-chosen-display" style="margin-top:12px;font-size:13px;color:var(--tx2)"></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end">
+        <button class="btn btn-primary" onclick="applyAccumulation();goPrepStep(1)">Apply &amp; Next →</button>
+      </div>
+    </div>
+
+    <!-- STEP 1: Hierarchy -->
+    <div class="step-panel" id="prep-step-1">
+      <div class="card" id="hier-step-card">
+        <div class="card-title"><span class="card-title-icon">🌲</span> Hierarchy Aggregation</div>
+        <div id="hier-not-applicable" style="display:none">
+          <div class="alert alert-info">No hierarchy columns detected. This step is not applicable.</div>
+        </div>
+        <div id="hier-applicable" style="display:none">
+          <p style="font-size:13px;color:var(--tx2);margin-bottom:20px">Aggregate leaf series upward through the hierarchy. Choose the aggregation method and view level effects.</p>
+          <div class="grid-2" style="margin-bottom:20px">
+            <div class="form-group">
+              <label class="form-label">Aggregation Method</label>
+              <select class="form-control" id="hier-method">
+                <option value="sum">Sum (additive — default for flow quantities)</option>
+                <option value="mean">Mean (stock quantities, rates)</option>
+                <option value="median">Median (robust)</option>
+                <option value="max">Max</option>
+                <option value="min">Min</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">View Level</label>
+              <select class="form-control" id="hier-level-select"></select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="runHierarchy()">⚡ Run Aggregation</button>
+          <div id="hier-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Building hierarchy…</span></div>
+          <div id="hier-results" style="display:none;margin-top:20px">
+            <div id="hier-level-effects" class="grid-4" style="margin-bottom:16px"></div>
+            <div class="tbl-wrap" id="hier-preview-tbl"></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:space-between">
+        <button class="btn btn-secondary" onclick="goPrepStep(0)">← Back</button>
+        <button class="btn btn-primary" onclick="goPrepStep(2)">Next →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Missing Values -->
+    <div class="step-panel" id="prep-step-2">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">🕳</span> Missing Values Treatment</div>
+        <div class="grid-2" style="margin-bottom:20px">
+          <div class="form-group">
+            <label class="form-label">Imputation Method</label>
+            <select class="form-control" id="mv-method">
+              <option value="auto">Auto (recommended)</option>
+              <option value="linear">Linear interpolation</option>
+              <option value="spline">Cubic spline</option>
+              <option value="seasonal">Seasonal fill (same-period average)</option>
+              <option value="knn">KNN imputation</option>
+              <option value="forward_fill">Forward fill</option>
+              <option value="backward_fill">Backward fill</option>
+              <option value="mean">Global mean</option>
+              <option value="median">Global median</option>
+              <option value="zero">Fill with zero</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Seasonal Period (for seasonal fill)</label>
+            <input type="number" class="form-control" id="mv-period" value="7" min="2">
+            <div style="margin-top:12px" class="toggle-group">
+              <label class="toggle">
+                <input type="checkbox" id="mv-zero-as-missing">
+                <span class="toggle-slider"></span>
+              </label>
+              <span>Treat zeros as missing</span>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="runMissingValues()">⚡ Apply Treatment</button>
+        <div id="mv-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Imputing missing values…</span></div>
+        <div id="mv-results" style="display:none;margin-top:20px">
+          <div id="mv-summary-grid" class="grid-4" style="margin-bottom:16px"></div>
+          <div class="tbl-wrap" id="mv-preview-tbl" style="max-height:220px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:space-between">
+        <button class="btn btn-secondary" onclick="goPrepStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goPrepStep(3)">Next →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Outliers -->
+    <div class="step-panel" id="prep-step-3">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">⚡</span> Outlier Detection &amp; Treatment</div>
+        <div class="grid-2" style="margin-bottom:20px">
+          <div>
+            <label class="form-label">Detection Methods</label>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer">
+                <input type="checkbox" id="out-iqr" checked style="accent-color:var(--a1)"> IQR (1.5× fence — robust)
+              </label>
+              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer">
+                <input type="checkbox" id="out-zscore" checked style="accent-color:var(--a1)"> Z-score (|z|&gt;3)
+              </label>
+              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer">
+                <input type="checkbox" id="out-isof" checked style="accent-color:var(--a1)"> Isolation Forest (ML)
+              </label>
+              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer">
+                <input type="checkbox" id="out-lof" style="accent-color:var(--a1)"> Local Outlier Factor
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Treatment Action</label>
+            <select class="form-control" id="out-treatment">
+              <option value="cap">Cap to IQR fences</option>
+              <option value="remove">Remove (set to NaN → re-imputed)</option>
+              <option value="keep">Keep (flag only)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="runOutliers()">⚡ Detect &amp; Treat</button>
+        <div id="out-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Running outlier detection…</span></div>
+        <div id="out-results" style="display:none;margin-top:20px">
+          <div id="out-summary-grid" class="grid-4" style="margin-bottom:16px"></div>
+          <div class="tbl-wrap" id="out-preview-tbl" style="max-height:220px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:space-between">
+        <button class="btn btn-secondary" onclick="goPrepStep(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goPrepStep(4)">Next →</button>
+      </div>
+    </div>
+
+    <!-- STEP 4: Aggregation method -->
+    <div class="step-panel" id="prep-step-4">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">⚙</span> Feature Engineering &amp; Aggregation</div>
+        <div class="grid-2" style="margin-bottom:20px;gap:24px">
+          <div>
+            <div class="form-group">
+              <label class="form-label">Stationarity Transform</label>
+              <select class="form-control" id="prep-transform">
+                <option value="auto">Auto-detect</option>
+                <option value="none">None</option>
+                <option value="log">Log(1+y)</option>
+                <option value="diff">First difference</option>
+                <option value="log_diff">Log + First difference</option>
+                <option value="boxcox">Box-Cox</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Scaling Method</label>
+              <select class="form-control" id="prep-scale">
+                <option value="minmax">MinMax [0,1]</option>
+                <option value="standard">Standard (z-score)</option>
+                <option value="robust">Robust (median/IQR)</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Forecast Horizon (periods)</label>
+              <input type="number" class="form-control" id="prep-horizon" value="13" min="1">
+            </div>
+          </div>
+          <div>
+            <div class="form-group">
+              <label class="form-label">Rolling Windows (comma-separated)</label>
+              <input type="text" class="form-control" id="prep-windows" value="7,14,28" placeholder="7,14,28">
+            </div>
+            <div style="margin-bottom:16px">
+              <label class="form-label">Train / Val / Test Split</label>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                <span style="font-size:12px;color:var(--tx2);width:40px">Train</span>
+                <input type="range" id="train-ratio" min="40" max="85" value="70" oninput="updateSplitDisplay()">
+                <span style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--a3);width:36px" id="train-val">70%</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                <span style="font-size:12px;color:var(--tx2);width:40px">Val</span>
+                <input type="range" id="val-ratio"   min="5"  max="25" value="15" oninput="updateSplitDisplay()">
+                <span style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--a2);width:36px" id="val-val">15%</span>
+              </div>
+              <div style="margin-top:6px;font-size:12px;color:var(--tx3)">
+                Test = remaining (<span id="test-val">15%</span>)
+              </div>
+            </div>
+            <div class="toggle-group" style="margin-top:8px">
+              <label class="toggle">
+                <input type="checkbox" id="prep-calendar" checked>
+                <span class="toggle-slider"></span>
+              </label>
+              <span>Include calendar features</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Output Format</label>
+          <div class="radio-pills">
+            <div class="radio-pill"><input type="radio" name="out-fmt" id="fmt-csv" value="csv" checked><label for="fmt-csv">CSV</label></div>
+            <div class="radio-pill"><input type="radio" name="out-fmt" id="fmt-excel" value="excel"><label for="fmt-excel">Excel (.xlsx)</label></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:space-between">
+        <button class="btn btn-secondary" onclick="goPrepStep(3)">← Back</button>
+        <button class="btn btn-primary" onclick="goPrepStep(5)">Next →</button>
+      </div>
+    </div>
+
+    <!-- STEP 5: Final prepare -->
+    <div class="step-panel" id="prep-step-5">
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title"><span class="card-title-icon">🚀</span> Prepare Data for Forecasting</div>
+        <p style="font-size:13px;color:var(--tx2);margin-bottom:20px">
+          Generates a forecast-ready feature matrix with lag features, rolling statistics,
+          calendar encodings, train/val/test split labels, and model type recommendations.
+        </p>
+        <div id="prep-config-summary" style="margin-bottom:20px"></div>
+        <button class="btn btn-primary btn-lg" onclick="runPrepare()">⚡ Generate Prepared Dataset</button>
+        <div id="prep-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Running full preparation pipeline…</span></div>
+      </div>
+
+      <div id="prep-results" style="display:none">
+        <!-- Summary stats -->
+        <div class="grid-4" id="prep-stats-row" style="margin-bottom:20px"></div>
+
+        <!-- Series model recommendations -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title"><span class="card-title-icon">🤖</span> Model Type Recommendations</div>
+          <div id="model-recs-table"></div>
+        </div>
+
+        <!-- Data preview -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title"><span class="card-title-icon">📋</span> Preview (first 15 rows)</div>
+          <div style="margin-bottom:10px;font-size:12px;color:var(--tx2)" id="prep-col-list"></div>
+          <div class="tbl-wrap" id="prep-preview-tbl" style="max-height:360px;overflow-y:auto;overflow-x:auto"></div>
+        </div>
+
+        <!-- Download -->
+        <div class="card">
+          <div class="card-title"><span class="card-title-icon">💾</span> Download Prepared Data</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-download btn-lg" id="download-btn" onclick="downloadData()">⬇ Download Dataset</button>
+            <div id="download-info" style="font-size:13px;color:var(--tx2)"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="btn btn-secondary" onclick="goPrepStep(4)">← Back</button>
+      </div>
+    </div>
+
+  </div><!-- /#prep-content -->
+</div>
+
+</main>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
+const API = 'http://localhost:8000';   // relative — same origin; change to 'http://localhost:8000' if cross-origin
+let STATE = {
+  token: null,
+  filename: null,
+  columns: [],
+  uploadMeta: null,
+  schemaMeta: null,
+  valueCols: [],
+  hierCols: [],
+  isHierarchy: false,
+  targetFreq: null,
+  downloadToken: null,
+  downloadExt: 'csv',
+  currentPrepStep: 0,
+  charts: {},
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════════════════════════════
+function toast(msg, type='info', dur=3500) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), dur);
+}
+
+async function api(path, body=null, method='POST') {
+  const opts = { method, headers: {} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(API + path, opts);
+  console.log("Response = " + r)
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try { const j = await r.json(); msg = j.detail || JSON.stringify(j); } catch(e) {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function show(id, display='block') { const el=document.getElementById(id); if(el) el.style.display=display; }
+function hide(id) { const el=document.getElementById(id); if(el) el.style.display='none'; }
+function setHtml(id, html) { const el=document.getElementById(id); if(el) el.innerHTML=html; }
+
+function fmtNum(v, decimals=2) {
+  if (v == null || v !== v) return '—';
+  if (typeof v === 'number') return v.toFixed(decimals);
+  return v;
+}
+
+function buildTable(rows, cols) {
+  if (!rows || !rows.length) return '<div style="padding:12px;color:var(--tx3);font-size:13px">No data</div>';
+  const headers = cols || Object.keys(rows[0]);
+  let h = `<table><thead><tr>${headers.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(r => {
+    h += `<tr>${headers.map(c => {
+      const v = r[c];
+      if (c === 'split') return `<td><span class="td-tag tag-${v}">${v}</span></td>`;
+      if (c === 'model_type_recommendation') return `<td><span class="td-tag tag-model">${v||'—'}</span></td>`;
+      return `<td>${v == null ? '—' : String(v).substring(0,40)}</td>`;
+    }).join('')}</tr>`;
+  });
+  return h + '</tbody></table>';
+}
+
+function statCard(val, label, sub='', color='var(--tx)') {
+  return `<div class="stat-card">
+    <div class="stat-val" style="color:${color}">${val}</div>
+    <div class="stat-label">${label}</div>
+    ${sub ? `<div class="stat-sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+function strengthBar(label, value, colorClass, note='') {
+  const pct = Math.round((value||0)*100);
+  const noteStr = note || (pct>60?'Strong':pct>30?'Moderate':'Weak');
+  return `<div class="strength-bar-wrap">
+    <div class="strength-label"><span>${label}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtNum(value,3)} — ${noteStr}</span></div>
+    <div class="strength-track"><div class="strength-fill ${colorClass}" style="width:${pct}%"></div></div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// API STATUS CHECK
+// ══════════════════════════════════════════════════════════════════════════════
+async function checkApiStatus() {
+  try {
+    await fetch(API + '/health');
+    const el = document.getElementById('api-status');
+    el.textContent = '● CONNECTED';
+    el.className = 'chip chip-green';
+  } catch(e) {
+    const el = document.getElementById('api-status');
+    el.textContent = '● OFFLINE (demo mode)';
+    el.className = 'chip chip-amber';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════════════════════════════════
+function switchTab(idx) {
+  [0,1,2].forEach(i => {
+    document.getElementById(`tab-${i}`).classList.toggle('active', i===idx);
+    document.getElementById(`panel-${i}`).classList.toggle('active', i===idx);
+  });
+  if (idx===1) initAnalyzerTab();
+  if (idx===2) initPrepTab();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 1 — UPLOAD
+// ══════════════════════════════════════════════════════════════════════════════
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) processFile(f);
+});
+
+function handleFileSelect(e) { if(e.target.files[0]) processFile(e.target.files[0]); }
+
+async function processFile(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  toast(`Uploading ${file.name}…`, 'info');
+  try {
+    const r = await fetch(API + '/api/upload', { method:'POST', body: formData });
+    console.log("R is = ", r)
+    if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
+    const meta = await r.json();
+    STATE.token = meta.token;
+    STATE.filename = meta.filename;
+    STATE.uploadMeta = meta;
+    renderUploadResult(meta);
+    toast(`${file.name} uploaded`, 'ok');
+  } catch(e) {
+    toast(`Upload error: ${e.message}`, 'err');
+    console.error(e);
+  }
+}
+
+function renderUploadResult(meta) {
+  // preview stats
+  const statsHtml = [
+    statCard(meta.n_rows.toLocaleString(), 'Rows'),
+    statCard(meta.columns.length, 'Columns'),
+    statCard(meta.ts_candidates.length, 'Date Cols', '', 'var(--a6)'),
+    statCard(meta.is_hierarchy ? 'YES' : 'NO', 'Hierarchy', '', meta.is_hierarchy?'var(--a4)':'var(--tx3)'),
+  ].join('');
+  setHtml('preview-stats', statsHtml);
+
+  // preview table
+  setHtml('preview-table-wrap', buildTable(meta.preview, null));
+  show('preview-card');
+
+  // column mapper
+  buildColMapper(meta);
+  show('schema-confirm-card');
+
+  if (meta.needs_confirm) {
+    const el = document.getElementById('schema-detect-msg');
+    el.textContent = '⚠ Auto-detection is uncertain. Please confirm column roles below.';
+    el.style.display = 'flex';
+  }
+}
+
+function buildColMapper(meta) {
+  const roleOptions = `
+    <option value="timestamp">Timestamp</option>
+    <option value="value">Value</option>
+    <option value="hierarchy">Hierarchy</option>
+    <option value="ignore">Ignore</option>`;
+
+  const rows = meta.columns.map(col => {
+    let defaultRole = 'ignore';
+    if (meta.ts_candidates.includes(col)) defaultRole = 'timestamp';
+    else if (meta.value_candidates.includes(col)) defaultRole = 'value';
+    else if (meta.hierarchy_candidates.includes(col)) defaultRole = 'hierarchy';
+
+    const badge = defaultRole === 'timestamp' ? '<span class="td-tag tag-ts">timestamp</span>' :
+                  defaultRole === 'value'     ? '<span class="td-tag tag-value">value</span>' :
+                  defaultRole === 'hierarchy' ? '<span class="td-tag tag-hier">hierarchy</span>' :
+                                                '<span class="td-tag tag-other">—</span>';
+    return `<div class="col-row">
+      <div class="col-name" style="display:flex;gap:8px;align-items:center">
+        ${badge} <span style="color:var(--tx)">${col}</span>
+        <span style="color:var(--tx3);font-size:10px">${(meta.dtypes||{})[col]||''}</span>
+      </div>
+      <span style="font-size:11px;color:var(--tx3);font-family:'IBM Plex Mono',monospace">
+        ${meta.nunique[col]} unique
+      </span>
+      <select class="form-control" id="col-role-${CSS.escape(col)}" style="padding:6px 10px;font-size:12px">
+        ${roleOptions}
+      </select>
+    </div>`;
+  });
+  setHtml('col-mapper-body', rows.join(''));
+
+  // set default values
+  meta.columns.forEach(col => {
+    const sel = document.getElementById(`col-role-${CSS.escape(col)}`);
+    if (!sel) return;
+    let role = 'ignore';
+    if (meta.ts_candidates.includes(col)) role = 'timestamp';
+    else if (meta.value_candidates.includes(col)) role = 'value';
+    else if (meta.hierarchy_candidates.includes(col)) role = 'hierarchy';
+    sel.value = role;
+  });
+}
+
+async function confirmSchema() {
+  const cols = STATE.uploadMeta.columns;
+  let tsCol = null, valCols = [], hierCols = [];
+
+  cols.forEach(col => {
+    const sel = document.getElementById(`col-role-${CSS.escape(col)}`);
+    if (!sel) return;
+    if (sel.value === 'timestamp') tsCol = col;
+    else if (sel.value === 'value') valCols.push(col);
+    else if (sel.value === 'hierarchy') hierCols.push(col);
+  });
+
+  if (!tsCol) { toast('Please assign a Timestamp column', 'err'); return; }
+  if (!valCols.length) { toast('Please assign at least one Value column', 'err'); return; }
+
+  toast('Ingesting…', 'info');
+  try {
+    const r = await api('/api/confirm-schema', {
+      token: STATE.token,
+      timestamp_col: tsCol,
+      value_cols: valCols,
+      hierarchy_cols: hierCols,
+    });
+    STATE.valueCols  = valCols;
+    STATE.hierCols   = hierCols;
+    STATE.isHierarchy = hierCols.length > 0;
+    STATE.schemaMeta = r.schema;
+    renderSchemaResult(r, tsCol, valCols, hierCols);
+    toast('Dataset ingested successfully ✓', 'ok');
+  } catch(e) {
+    toast(`Ingestion error: ${e.message}`, 'err');
+  }
+}
+
+function renderSchemaResult(r, tsCol, valCols, hierCols) {
+  hide('schema-confirm-card');
+  const html = `
+    <div class="grid-2" style="gap:12px">
+      ${statCard(r.schema.n_rows, 'Observations')}
+      ${statCard(r.schema.detected_freq, 'Detected Freq', '', 'var(--a6)')}
+      ${statCard(valCols.length, 'Value Series')}
+      ${statCard(hierCols.length, 'Hierarchy Levels', '', hierCols.length?'var(--a4)':'var(--tx3)')}
+    </div>
+    <div style="margin-top:14px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--tx2);line-height:1.8">
+      <div>⏱ Timestamp: <span style="color:var(--tx)">${tsCol}</span></div>
+      <div>📈 Values: <span style="color:var(--a3)">${valCols.join(', ')}</span></div>
+      ${hierCols.length ? `<div>🌲 Hierarchy: <span style="color:var(--a4)">${hierCols.join(' → ')}</span></div>` : ''}
+      <div>📅 Range: <span style="color:var(--tx)">${r.schema.date_range[0].substring(0,10)} → ${r.schema.date_range[1].substring(0,10)}</span></div>
+    </div>
+    ${r.warnings.length ? `<div class="alert alert-warn" style="margin-top:12px">${r.warnings.join('; ')}</div>` : ''}`;
+  setHtml('schema-result-body', html);
+  show('schema-result-card');
+}
+
+function resetUpload() {
+  STATE.token = null;
+  hide('schema-confirm-card');
+  hide('preview-card');
+  hide('schema-result-card');
+  document.getElementById('file-input').value = '';
+  toast('Reset complete', 'info');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 2 — ANALYZER
+// ══════════════════════════════════════════════════════════════════════════════
+function initAnalyzerTab() {
+  if (!STATE.token) { show('analyze-no-data'); hide('analyze-results'); return; }
+  hide('analyze-no-data');
+  // populate series selector
+  const sel = document.getElementById('analyze-series-select');
+  sel.innerHTML = STATE.valueCols.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function mkChartCfg(labels, datasets, type='line') {
+  return {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive:true, animation:{duration:400},
+      plugins:{ legend:{display:false}, tooltip:{mode:'index',intersect:false,
+        backgroundColor:'rgba(12,16,25,0.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8',
+        borderColor:'rgba(59,130,246,0.3)', borderWidth:1,
+      }},
+      scales:{
+        x:{ ticks:{ color:'#3d5a7a', maxTicksLimit:8, font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,0.5)'} },
+        y:{ ticks:{ color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,0.5)'} },
+      },
+    }
+  };
+}
+
+function destroyChart(id) { if(STATE.charts[id]) { STATE.charts[id].destroy(); delete STATE.charts[id]; } }
+
+function makeChart(id, labels, data, color, label='', type='line') {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const cfg = mkChartCfg(labels, [{
+    label, data,
+    borderColor: color, backgroundColor: color+'22',
+    pointRadius:0, pointHoverRadius:4,
+    borderWidth:1.5, tension:0.3, fill: type==='line',
+  }], type);
+  STATE.charts[id] = new Chart(ctx, cfg);
+}
+
+async function runAnalysis() {
+  if (!STATE.token) { toast('No data loaded', 'err'); return; }
+  const seriesKey = document.getElementById('analyze-series-select').value;
+  const period = parseInt(document.getElementById('analyze-period').value)||null;
+
+  show('analyze-loader');
+  hide('analyze-results');
+  try {
+    const r = await api('/api/analyze', { token:STATE.token, series_key:seriesKey, period });
+    renderAnalysis(r, seriesKey);
+    show('analyze-results');
+    toast('Analysis complete ✓', 'ok');
+  } catch(e) {
+    toast(`Analysis failed: ${e.message}`, 'err');
+  } finally { hide('analyze-loader'); }
+}
+
+function renderAnalysis(r, col) {
+  const cd = r.chart_data;
+  const s = r.summary;
+  const st = s.series_stats || {};
+  const dc = s.decomp || {};
+  const oc = s.outliers || {};
+  const ic = s.intermittency || {};
+  const mv = s.missing_values || {};
+
+  // stat cards
+  setHtml('analyze-stats-row', [
+    statCard(st.n||'—', 'Observations'),
+    statCard(st.n_missing||0, 'Missing', `${fmtNum((st.n_missing||0)/((st.n||1))*100,1)}%`, st.n_missing?'var(--a2)':'var(--a3)'),
+    statCard(oc.n_outliers||0, 'Outliers', `${fmtNum(oc.pct_outliers,1)}%`, oc.n_outliers?'var(--a2)':'var(--a3)'),
+    statCard(ic.classification||'—', 'Demand Type', `ADI=${fmtNum(ic.ADI,2)} CV²=${fmtNum(ic.CV2,2)}`, 'var(--a4)'),
+  ].join(''));
+
+  // main chart
+  const labels = cd.labels||[];
+  const outlierSet = new Set(r.outlier_timestamps||[]);
+  const outlierData = labels.map((l,i) => outlierSet.has(l) ? (cd.original||[])[i] : null);
+
+  destroyChart('main-chart');
+  const mainCtx = document.getElementById('main-chart');
+  if(mainCtx) {
+    STATE.charts['main-chart'] = new Chart(mainCtx, {
+      type:'line',
+      data:{ labels, datasets:[
+        { label:'Original', data:cd.original||[], borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.05)',
+          pointRadius:0, pointHoverRadius:4, borderWidth:1.5, tension:0.3, fill:true },
+        { label:'Trend',    data:cd.trend||[],    borderColor:'#f97316', pointRadius:0, borderWidth:1.5, tension:0.4, fill:false },
+        { label:'Outliers', data:outlierData, type:'scatter',
+          pointRadius:5, pointStyle:'crossRot', borderColor:'#ef4444', borderWidth:2 },
+      ]},
+      options:{ responsive:true, animation:{duration:400},
+        plugins:{ legend:{display:true, labels:{color:'#8faec8',boxWidth:12,font:{size:11}}},
+          tooltip:{ mode:'index',intersect:false,backgroundColor:'rgba(12,16,25,0.9)',titleColor:'#e8f0fe',bodyColor:'#8faec8',borderColor:'rgba(59,130,246,0.3)',borderWidth:1 }
+        },
+        scales:{
+          x:{ ticks:{ color:'#3d5a7a',maxTicksLimit:10,font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,0.5)'} },
+          y:{ ticks:{ color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,0.5)'} },
+        }
+      }
+    });
+  }
+
+  // component charts
+  if(cd.trend)    makeChart('trend-chart',    labels, cd.trend,    '#f97316', 'Trend');
+  if(cd.seasonal) makeChart('seasonal-chart', labels, cd.seasonal, '#8b5cf6', 'Seasonal');
+  if(cd.cycle)    makeChart('cycle-chart',    labels, cd.cycle,    '#06b6d4', 'Cycle');
+  if(cd.residual) makeChart('residual-chart', labels, cd.residual, '#ef4444', 'Residual');
+
+  // strength bars
+  const Ft = dc.trend_strength_Ft||0;
+  const Fs = dc.seasonal_strength_Fs||0;
+  setHtml('strength-bars',
+    strengthBar('Trend Strength (Ft)', Ft, 'fill-amber') +
+    strengthBar('Seasonal Strength (Fs)', Fs, 'fill-violet') +
+    strengthBar('Outlier Rate', (oc.pct_outliers||0)/100, 'fill-red',
+      oc.pct_outliers > 10 ? 'High' : oc.pct_outliers > 3 ? 'Moderate' : 'Low')
+  );
+
+  // model recommendation
+  const interm = ic.classification || 'Smooth';
+  const modelMap = {
+    'Lumpy':'TSB / Zero-Inflated', 'Intermittent':'Croston / SBA',
+    'Erratic':'ETS(M,N,N) / TBATS', 'Smooth': Ft>0.5&&Fs>0.5 ? 'Holt-Winters / SARIMA' :
+      Ft>0.5 ? 'Holt / ARIMA(p,1,0)' : Fs>0.5 ? 'ETS(A,N,A) / SARIMA' : 'ARIMA / ETS',
+  };
+  const recModel = modelMap[interm] || 'ARIMA / ETS';
+  setHtml('model-rec-box', `
+    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--a1);margin-bottom:6px">${recModel}</div>
+      <div style="font-size:12px;color:var(--tx2)">Demand class: <span style="color:var(--a4)">${interm}</span>
+        &nbsp;·&nbsp; d=${dc.differencing_order||0}
+        &nbsp;·&nbsp; period=${dc.period_used||'?'}</div>
+      <div style="font-size:12px;color:var(--tx2);margin-top:6px">${dc.interpretation||''}</div>
+    </div>`);
+
+  // stationarity
+  const stTests = dc.stationarity || {};
+  let stHtml = '<div style="display:flex;flex-direction:column;gap:8px">';
+  Object.entries(stTests).forEach(([test, res]) => {
+    const ok = res.stationary;
+    stHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg2);border-radius:6px;border:1px solid var(--border)">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--tx)">${test}</span>
+      <span style="font-size:11px;color:var(--tx2)">stat=${fmtNum(res.statistic,3)} p=${fmtNum(res.p_value,3)}</span>
+      <span class="td-tag" style="${ok?'background:rgba(16,185,129,0.15);color:var(--a3)':'background:rgba(249,115,22,0.15);color:var(--a2)'}">
+        ${ok ? '✓ Stationary' : '✗ Non-stationary'}
+      </span></div>`;
+  });
+  setHtml('stat-tests-body', stHtml + '</div>');
+
+  // outlier
+  setHtml('outlier-summary-body', `
+    <div class="grid-2" style="gap:8px">
+      ${statCard(oc.n_outliers||0,'Total Outliers','',oc.n_outliers?'var(--a2)':'var(--a3)')}
+      ${statCard(`${fmtNum(oc.pct_outliers,1)}%`,'Outlier Rate')}
+      ${statCard(oc.high_severity||0,'HIGH','critical','var(--a5)')}
+      ${statCard(oc.medium_severity||0,'MEDIUM','','var(--a2)')}
+    </div>`);
+
+  // intermittency
+  setHtml('intermittency-body', `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${infoRow('Classification', `<span style="color:var(--a4);font-weight:600">${ic.classification||'—'}</span>`)}
+      ${infoRow('ADI', fmtNum(ic.ADI,3))}
+      ${infoRow('CV²', fmtNum(ic.CV2,3))}
+      ${infoRow('% Zero', `${ic.pct_zero||0}%`)}
+      ${infoRow('Croston Forecast', fmtNum(ic.croston_forecast_1step,2))}
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:12px;color:var(--tx2)"><strong style="color:var(--tx)">Recommended:</strong> ${(ic.model_recommendations||[]).slice(0,3).join(', ')}</div>`);
+
+  // missing
+  setHtml('missing-body', `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${infoRow('Missing Before', `${mv.n_missing_before||0} (${fmtNum(mv.pct_missing_before,1)}%)`)}
+      ${infoRow('Pattern', mv.pattern||'—')}
+      ${infoRow('Max Gap', `${(mv.gap_stats||{}).max_gap||0} periods`)}
+      ${infoRow('Gaps', `${(mv.gap_stats||{}).n_gaps||0}`)}
+    </div>`);
+}
+
+function infoRow(label, val) {
+  return `<div style="display:flex;justify-content:space-between;padding:7px 12px;background:var(--bg2);border-radius:6px;border:1px solid var(--border)">
+    <span style="font-size:12px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px">${label}</span>
+    <span style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--tx)">${val}</span>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAB 3 — PREPARE DATA
+// ══════════════════════════════════════════════════════════════════════════════
+function initPrepTab() {
+  if (!STATE.token) { show('prep-no-data'); hide('prep-content'); return; }
+  hide('prep-no-data');
+  show('prep-content');
+
+  // hierarchy step visibility
+  if (!STATE.isHierarchy) {
+    show('hier-not-applicable'); hide('hier-applicable');
+    document.getElementById('pstep-1').style.opacity='0.5';
+  } else {
+    hide('hier-not-applicable'); show('hier-applicable');
+    const sel = document.getElementById('hier-level-select');
+    sel.innerHTML = `<option value="">All levels</option>` +
+      STATE.hierCols.map((c,i)=>`<option value="level_${i+1}">${c}</option>`).join('');
+  }
+  updateSplitDisplay();
+  updatePrepConfigSummary();
+}
+
+function goPrepStep(idx) {
+  [0,1,2,3,4,5].forEach(i => {
+    document.getElementById(`prep-step-${i}`).classList.toggle('active', i===idx);
+    const s = document.getElementById(`pstep-${i}`);
+    s.classList.remove('active','done');
+    if (i < idx) s.classList.add('done');
+    else if (i === idx) s.classList.add('active');
+  });
+  STATE.currentPrepStep = idx;
+  if (idx === 5) updatePrepConfigSummary();
+}
+
+function updateSplitDisplay() {
+  const tr = parseInt(document.getElementById('train-ratio').value);
+  const vr = parseInt(document.getElementById('val-ratio').value);
+  document.getElementById('train-val').textContent = tr + '%';
+  document.getElementById('val-val').textContent = vr + '%';
+  document.getElementById('test-val').textContent = Math.max(0, 100-tr-vr) + '%';
+}
+
+function updatePrepConfigSummary() {
+  const tr = document.getElementById('train-ratio')?.value || 70;
+  const vr = document.getElementById('val-ratio')?.value || 15;
+  const transform = document.getElementById('prep-transform')?.value || 'auto';
+  const scale = document.getElementById('prep-scale')?.value || 'minmax';
+  const horizon = document.getElementById('prep-horizon')?.value || 13;
+  const fmt = document.querySelector('input[name="out-fmt"]:checked')?.value || 'csv';
+
+  setHtml('prep-config-summary', `
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${chip('Interval', STATE.targetFreq||'auto', 'blue')}
+      ${chip('Transform', transform, 'amber')}
+      ${chip('Scale', scale, 'green')}
+      ${chip('Horizon', horizon+' periods', 'violet')}
+      ${chip('Split', `${tr}/${vr}/${Math.max(0,100-parseInt(tr)-parseInt(vr))}`, 'blue')}
+      ${chip('Format', fmt.toUpperCase(), 'green')}
+    </div>`);
+}
+
+function chip(label, val, color) {
+  const colors = {blue:'var(--a1)',amber:'var(--a2)',green:'var(--a3)',violet:'var(--a4)'};
+  return `<span style="background:rgba(59,130,246,0.08);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;color:${colors[color]||'var(--tx2)'};">
+    <span style="color:var(--tx3)">${label}:</span> ${val}</span>`;
+}
+
+// ── STEP 0: Interval ──────────────────────────────────────────────────────────
+async function runIntervalAdvice() {
+  if (!STATE.token) return;
+  show('interval-loader'); hide('interval-results');
+  document.getElementById('interval-advice-btn').disabled = true;
+  try {
+    const r = await api('/api/interval-advice', { token: STATE.token, top_n: 5 });
+    renderIntervalRecs(r);
+    show('interval-results');
+    toast('Interval advice ready ✓', 'ok');
+  } catch(e) {
+    toast(`Interval advice failed: ${e.message}`, 'err');
+  } finally {
+    hide('interval-loader');
+    document.getElementById('interval-advice-btn').disabled = false;
+  }
+}
+
+function renderIntervalRecs(r) {
+  const recs = r.recommendations || [];
+  setHtml('interval-recs-grid', recs.slice(0,3).map((rec, i) => `
+    <div style="background:var(--bg2);border:1px solid ${i===0?'var(--a1)':'var(--border)'};border-radius:12px;padding:18px;cursor:pointer;transition:all 0.2s"
+         onclick="selectInterval('${rec.freq}','${rec.alias}')"
+         id="irec-${rec.freq}">
+      ${i===0?`<div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--a1);margin-bottom:6px;letter-spacing:1px">★ RECOMMENDED</div>`:''}
+      <div style="font-family:'Instrument Serif',serif;font-size:22px;margin-bottom:4px">${rec.alias}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--a6);margin-bottom:10px">${rec.freq}</div>
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx3);margin-bottom:3px">
+          <span>Score</span><span style="color:var(--tx)">${rec.score}</span>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px">
+          <div style="height:100%;width:${Math.min(100,rec.score)}%;background:var(--a1);border-radius:2px"></div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--tx3)">Info loss: ${rec.info_loss_pct}%</div>
+      <div style="font-size:11px;color:var(--tx2);margin-top:4px;line-height:1.4">${rec.rationale.split(';')[0]}</div>
+    </div>`).join(''));
+
+  // pills
+  const allFreqs = ['H','D','W','2W','MS','QS','AS'];
+  setHtml('interval-pills', allFreqs.map(f => `
+    <div class="radio-pill">
+      <input type="radio" name="interval-pick" id="ip-${f}" value="${f}" ${f===r.best_freq?'checked':''} onchange="selectInterval('${f}','${f}')">
+      <label for="ip-${f}">${f}</label>
+    </div>`).join(''));
+
+  STATE.targetFreq = r.best_freq;
+  setHtml('interval-chosen-display',
+    `<span style="color:var(--tx3)">Selected:</span> <strong style="color:var(--a1)">${r.best_alias} (${r.best_freq})</strong>`);
+}
+
+function selectInterval(freq, alias) {
+  STATE.targetFreq = freq;
+  const ip = document.getElementById(`ip-${freq}`);
+  if (ip) ip.checked = true;
+  setHtml('interval-chosen-display',
+    `<span style="color:var(--tx3)">Selected:</span> <strong style="color:var(--a1)">${alias} (${freq})</strong>`);
+}
+
+async function applyAccumulation() {
+  if (!STATE.token || !STATE.targetFreq) { toast('No interval selected', 'err'); return; }
+  try {
+    await api('/api/accumulate', {
+      token: STATE.token,
+      target_freq: STATE.targetFreq,
+      method: 'auto',
+      quantity_type: 'flow',
+    });
+    toast(`Accumulated to ${STATE.targetFreq} ✓`, 'ok');
+  } catch(e) {
+    toast(`Accumulation warning: ${e.message}`, 'err');
+  }
+}
+
+// ── STEP 1: Hierarchy ─────────────────────────────────────────────────────────
+async function runHierarchy() {
+  if (!STATE.token || !STATE.isHierarchy) return;
+  show('hier-loader'); hide('hier-results');
+  try {
+    const method = document.getElementById('hier-method').value;
+    const r = await api('/api/hierarchy', { token: STATE.token, method });
+    renderHierarchyResults(r);
+    show('hier-results');
+    toast('Hierarchy built ✓', 'ok');
+  } catch(e) {
+    toast(`Hierarchy failed: ${e.message}`, 'err');
+  } finally { hide('hier-loader'); }
+}
+
+function renderHierarchyResults(r) {
+  // level effects
+  const effects = r.level_effects || {};
+  setHtml('hier-level-effects', Object.entries(effects).map(([level, eff]) =>
+    statCard(fmtNum(eff.avg_cv, 4), `${level} CV`, eff.interpretation, 'var(--tx)')
+  ).join(''));
+
+  // level series list preview
+  const rows = Object.entries(r.level_groups||{}).map(([level, keys]) => ({
+    Level: level, Series: keys.length, Example: keys[0] || '—'
+  }));
+  setHtml('hier-preview-tbl', buildTable(rows, ['Level','Series','Example']));
+}
+
+// ── STEP 2: Missing Values ────────────────────────────────────────────────────
+async function runMissingValues() {
+  if (!STATE.token) return;
+  show('mv-loader'); hide('mv-results');
+  try {
+    const r = await api('/api/missing-values', {
+      token: STATE.token,
+      method: document.getElementById('mv-method').value,
+      period: parseInt(document.getElementById('mv-period').value)||7,
+      zero_as_missing: document.getElementById('mv-zero-as-missing').checked,
+    });
+    renderMVResults(r);
+    show('mv-results');
+    toast('Missing values treated ✓', 'ok');
+  } catch(e) {
+    toast(`Missing values error: ${e.message}`, 'err');
+  } finally { hide('mv-loader'); }
+}
+
+function renderMVResults(r) {
+  const stats = Object.values(r.results||{})[0] || {};
+  setHtml('mv-summary-grid', [
+    statCard(stats.n_missing_before||0, 'Missing Before', '', stats.n_missing_before?'var(--a2)':'var(--a3)'),
+    statCard(stats.n_missing_after||0,  'Missing After',  '', stats.n_missing_after?'var(--a5)':'var(--a3)'),
+    statCard(stats.pattern||'—', 'Pattern'),
+    statCard(stats.method_used||'—', 'Method', '', 'var(--a6)'),
+  ].join(''));
+  setHtml('mv-preview-tbl', buildTable(r.preview||[], null));
+}
+
+// ── STEP 3: Outliers ──────────────────────────────────────────────────────────
+async function runOutliers() {
+  if (!STATE.token) return;
+  show('out-loader'); hide('out-results');
+  const methods = ['iqr','zscore','isof','lof'].filter(m => document.getElementById(`out-${m}`)?.checked);
+  try {
+    const r = await api('/api/outliers', {
+      token: STATE.token, methods,
+      treatment: document.getElementById('out-treatment').value,
+    });
+    renderOutlierResults(r);
+    show('out-results');
+    toast('Outlier treatment applied ✓', 'ok');
+  } catch(e) {
+    toast(`Outlier error: ${e.message}`, 'err');
+  } finally { hide('out-loader'); }
+}
+
+function renderOutlierResults(r) {
+  const stats = Object.values(r.summary||{})[0] || {};
+  setHtml('out-summary-grid', [
+    statCard(stats.n_outliers||0, 'Outliers Found', `${fmtNum(stats.pct_outliers,1)}%`, stats.n_outliers?'var(--a2)':'var(--a3)'),
+    statCard(stats.high_severity||0, 'HIGH', '', 'var(--a5)'),
+    statCard(stats.medium_severity||0, 'MEDIUM', '', 'var(--a2)'),
+    statCard(r.treatment_applied||'—', 'Treatment', '', 'var(--a6)'),
+  ].join(''));
+  setHtml('out-preview-tbl', buildTable(r.preview||[], null));
+}
+
+// ── STEP 5: Prepare ───────────────────────────────────────────────────────────
+async function runPrepare() {
+  if (!STATE.token) return;
+  show('prep-loader'); hide('prep-results');
+  const windows = (document.getElementById('prep-windows').value||'7,14,28')
+    .split(',').map(v=>parseInt(v.trim())).filter(v=>!isNaN(v));
+  const tr = parseInt(document.getElementById('train-ratio').value)/100;
+  const vr = parseInt(document.getElementById('val-ratio').value)/100;
+  const fmt = document.querySelector('input[name="out-fmt"]:checked')?.value || 'csv';
+
+  try {
+    const r = await api('/api/prepare', {
+      token: STATE.token,
+      transform: document.getElementById('prep-transform').value,
+      scale_method: document.getElementById('prep-scale').value,
+      rolling_windows: windows,
+      add_calendar: document.getElementById('prep-calendar').checked,
+      train_ratio: tr,
+      val_ratio: vr,
+      horizon: parseInt(document.getElementById('prep-horizon').value)||1,
+      output_format: fmt,
+    });
+    STATE.downloadToken = r.download_token;
+    STATE.downloadExt = r.ext;
+    renderPrepResults(r);
+    show('prep-results');
+    toast('Dataset prepared ✓', 'ok');
+  } catch(e) {
+    toast(`Preparation failed: ${e.message}`, 'err');
+  } finally { hide('prep-loader'); }
+}
+
+function renderPrepResults(r) {
+  // stat cards
+  setHtml('prep-stats-row', [
+    statCard(r.n_rows.toLocaleString(), 'Total Rows'),
+    statCard(r.n_features, 'Features'),
+    statCard(r.series_summaries.length, 'Series'),
+    statCard(r.ext.toUpperCase(), 'Format', '', 'var(--a6)'),
+  ].join(''));
+
+  // model rec table
+  const recRows = r.series_summaries.map(s => ({
+    Series: s.series,
+    'Model Recommendation': s.model_type,
+    'Intermittency': s.intermittency,
+    'Trend Ft': fmtNum(s.Ft, 3),
+    'Season Fs': fmtNum(s.Fs, 3),
+    'Rows': s.n_rows,
+  }));
+  setHtml('model-recs-table', buildTable(recRows, null));
+
+  // col list
+  setHtml('prep-col-list',
+    `<strong style="color:var(--tx)">Columns (${r.columns.length}):</strong> ` +
+    r.columns.slice(0,20).map(c => {
+      const isModel = c === 'model_type_recommendation';
+      const isSplit = c === 'split';
+      const isTs    = c === 'timestamp' || c === 'date';
+      const cls = isModel ? 'tag-model' : isSplit ? 'tag-train' : isTs ? 'tag-ts' : '';
+      return cls ? `<span class="td-tag ${cls}" style="margin:2px">${c}</span>` : `<span style="margin:0 4px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)">${c}</span>`;
+    }).join('') + (r.columns.length > 20 ? `<span style="color:var(--tx3)"> +${r.columns.length-20} more</span>` : ''));
+
+  // preview table — highlight split and model columns
+  setHtml('prep-preview-tbl', buildTable(r.preview||[], r.columns.slice(0, 18)));
+
+  // download info
+  setHtml('download-info',
+    `<strong style="color:var(--tx)">${r.n_rows.toLocaleString()}</strong> rows · 
+     <strong style="color:var(--tx)">${r.n_features}</strong> features · 
+     <strong style="color:var(--tx)">${r.ext.toUpperCase()}</strong>`);
+}
+
+function downloadData() {
+  if (!STATE.downloadToken) { toast('No prepared data yet', 'err'); return; }
+  window.location.href = `${API}/api/download/${STATE.downloadToken}?ext=${STATE.downloadExt}`;
+  toast('Download started ✓', 'ok');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════════════
+checkApiStatus();
+</script>
+</body>
+</html>
