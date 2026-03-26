@@ -574,124 +574,154 @@ if _HAS_FASTAPI:
         output_format: str = "csv"   # csv | excel
         hier_level: Optional[str] = None
 
+    def _first_session_frame(sess: Dict[str, Any]) -> Optional[pd.DataFrame]:
+        for key in ("treated_df", "imputed_df", "accumulated_df", "df"):
+            if key in sess:
+                candidate = sess[key]
+                if isinstance(candidate, pd.DataFrame):
+                    return candidate
+        return None
+
     @app.post("/api/prepare")
     async def prepare(body: PrepareReq):
-        sess = _sessions.get(body.token)
-        if not sess or "df" not in sess:
-            raise HTTPException(404)
+        try:
+            sess = _sessions.get(body.token)
+            if sess is None or "df" not in sess:
+                raise HTTPException(
+                    404,
+                    "Session not found or schema not confirmed. Upload the file again and confirm the schema before preparing data.",
+                )
 
-        work_df = (sess.get("treated_df") or
-                   sess.get("imputed_df") or
-                   sess.get("accumulated_df") or
-                   sess["df"])
-        val_cols = sess.get("value_cols", work_df.select_dtypes("number").columns.tolist())
-        hier_cols = sess.get("hierarchy_cols", [])
+            work_df = _first_session_frame(sess)
+            if work_df is None:
+                raise HTTPException(500, "No prepared working dataframe found in session.")
 
-        all_prepared: List[pd.DataFrame] = []
+            val_cols = sess.get("value_cols")
+            if val_cols is None:
+                val_cols = work_df.select_dtypes("number").columns.tolist()
 
-        for col in val_cols:
-            series = work_df[col].dropna()
+            all_prepared: List[pd.DataFrame] = []
+            prep_failures: Dict[str, Any] = {}
 
-            # get ACF lags from earlier decomp if available
-            acf_lags = None
-            dr = sess.get("decomp_result")
-            if dr and dr.ok:
-                acf_lags = dr.metadata.get("acf_significant_lags")
+            for col in val_cols:
+                series = work_df[col].dropna()
 
-            # intermittency classification
-            interm_res = IntermittencyAgent().execute(series=series)
-            interm_cls = interm_res.metadata.get("summary", {}).get("classification", "Smooth") if interm_res.ok else "Smooth"
+                acf_lags = None
+                dr = sess.get("decomp_result")
+                if dr is not None and getattr(dr, "ok", False):
+                    acf_lags = dr.metadata.get("acf_significant_lags")
 
-            # decomp for model rec
-            decomp_res = DecompositionAgent().execute(series=series)
-            Ft = decomp_res.metadata.get("trend_strength_Ft", 0.0) if decomp_res.ok else 0.0
-            Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0.0) if decomp_res.ok else 0.0
-            d  = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
+                interm_res = IntermittencyAgent().execute(series=series)
+                interm_cls = (
+                    interm_res.metadata.get("summary", {}).get("classification", "Smooth")
+                    if interm_res.ok else "Smooth"
+                )
 
-            model_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
+                decomp_res = DecompositionAgent().execute(series=series)
+                Ft = decomp_res.metadata.get("trend_strength_Ft", 0.0) if decomp_res.ok else 0.0
+                Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0.0) if decomp_res.ok else 0.0
+                d = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
 
-            # data prep
-            prep_res = DataPreparationAgent().execute(
-                series=series,
-                target_col=col,
-                transform=body.transform,
-                scale_method=body.scale_method,
-                rolling_windows=body.rolling_windows,
-                add_calendar=body.add_calendar,
-                train_ratio=body.train_ratio,
-                val_ratio=body.val_ratio,
-                horizon=body.horizon,
-                acf_lags=acf_lags,
+                model_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
+
+                prep_res = DataPreparationAgent().execute(
+                    series=series,
+                    target_col=col,
+                    transform=body.transform,
+                    scale_method=body.scale_method,
+                    rolling_windows=body.rolling_windows,
+                    add_calendar=body.add_calendar,
+                    train_ratio=body.train_ratio,
+                    val_ratio=body.val_ratio,
+                    horizon=body.horizon,
+                    acf_lags=acf_lags,
+                )
+                if not prep_res.ok:
+                    prep_failures[col] = {
+                        "errors": prep_res.errors,
+                        "warnings": prep_res.warnings,
+                    }
+                    continue
+
+                feat_df = prep_res.data["feature_matrix"].copy()
+                feat_df["series_name"] = col
+                feat_df["model_type_recommendation"] = model_rec
+                feat_df["intermittency_class"] = interm_cls
+                feat_df["trend_strength_Ft"] = round(Ft, 4)
+                feat_df["seasonal_strength_Fs"] = round(Fs, 4)
+
+                n = len(feat_df)
+                n_train = prep_res.data["X_train"].shape[0]
+                n_val = prep_res.data["X_val"].shape[0]
+                split_labels = (
+                    ["train"] * n_train +
+                    ["validation"] * n_val +
+                    ["test"] * (n - n_train - n_val)
+                )
+                feat_df["split"] = split_labels[:n]
+
+                all_prepared.append(feat_df)
+
+            if not all_prepared:
+                raise HTTPException(
+                    500,
+                    _safe({
+                        "message": "Data preparation failed for all columns",
+                        "failures": prep_failures,
+                    }),
+                )
+
+            final_df = pd.concat(all_prepared, axis=0).reset_index()
+
+            token = str(uuid.uuid4())[:8]
+            if body.output_format == "excel":
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                    final_df.to_excel(writer, index=False, sheet_name="PreparedData")
+                _downloads[token] = buf.getvalue()
+                ext = "xlsx"
+                mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            else:
+                csv_bytes = final_df.to_csv(index=False).encode()
+                _downloads[token] = csv_bytes
+                ext = "csv"
+                mime = "text/csv"
+
+            series_summaries = []
+            for col in val_cols:
+                sub = final_df[final_df["series_name"] == col]
+                if len(sub) > 0:
+                    series_summaries.append({
+                        "series": col,
+                        "n_rows": len(sub),
+                        "n_features": len(sub.columns),
+                        "model_type": sub["model_type_recommendation"].iloc[0],
+                        "intermittency": sub["intermittency_class"].iloc[0],
+                        "Ft": float(sub["trend_strength_Ft"].iloc[0]),
+                        "Fs": float(sub["seasonal_strength_Fs"].iloc[0]),
+                    })
+
+            return {
+                "download_token": token,
+                "ext": ext,
+                "mime": mime,
+                "n_rows": len(final_df),
+                "n_features": len(final_df.columns),
+                "series_summaries": series_summaries,
+                "preview": _df_to_records(final_df, 15),
+                "columns": list(final_df.columns),
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                500,
+                _safe({
+                    "message": "Unexpected error in prepare",
+                    "error": str(exc),
+                    "traceback": traceback.format_exc(),
+                }),
             )
-            if not prep_res.ok:
-                continue
-
-            feat_df = prep_res.data["feature_matrix"].copy()
-            feat_df["series_name"] = col
-            feat_df["model_type_recommendation"] = model_rec
-            feat_df["intermittency_class"] = interm_cls
-            feat_df["trend_strength_Ft"] = round(Ft, 4)
-            feat_df["seasonal_strength_Fs"] = round(Fs, 4)
-
-            # split label
-            n = len(feat_df)
-            n_train = prep_res.data["X_train"].shape[0]
-            n_val   = prep_res.data["X_val"].shape[0]
-            split_labels = (
-                ["train"] * n_train +
-                ["validation"] * n_val +
-                ["test"] * (n - n_train - n_val)
-            )
-            feat_df["split"] = split_labels[:n]
-
-            all_prepared.append(feat_df)
-
-        if not all_prepared:
-            raise HTTPException(500, "Data preparation failed for all columns")
-
-        final_df = pd.concat(all_prepared, axis=0)
-        final_df = final_df.reset_index()
-
-        # serialise
-        token = str(uuid.uuid4())[:8]
-        if body.output_format == "excel":
-            buf = io.BytesIO()
-            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                final_df.to_excel(writer, index=False, sheet_name="PreparedData")
-            _downloads[token] = buf.getvalue()
-            ext = "xlsx"
-            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        else:
-            csv_bytes = final_df.to_csv(index=False).encode()
-            _downloads[token] = csv_bytes
-            ext = "csv"
-            mime = "text/csv"
-
-        # summary info
-        series_summaries = []
-        for col in val_cols:
-            sub = final_df[final_df["series_name"] == col]
-            if len(sub):
-                series_summaries.append({
-                    "series": col,
-                    "n_rows": len(sub),
-                    "n_features": len(sub.columns),
-                    "model_type": sub["model_type_recommendation"].iloc[0],
-                    "intermittency": sub["intermittency_class"].iloc[0],
-                    "Ft": float(sub["trend_strength_Ft"].iloc[0]),
-                    "Fs": float(sub["seasonal_strength_Fs"].iloc[0]),
-                })
-
-        return {
-            "download_token": token,
-            "ext": ext,
-            "mime": mime,
-            "n_rows": len(final_df),
-            "n_features": len(final_df.columns),
-            "series_summaries": series_summaries,
-            "preview": _df_to_records(final_df, 15),
-            "columns": list(final_df.columns),
-        }
 
     # ── Download ──────────────────────────────────────────────────────────────
 
@@ -735,6 +765,6 @@ if __name__ == "__main__":
     try:
         import uvicorn
         log.info("Starting TemporalMind server on http://localhost:8000")
-        uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
     except ImportError:
         log.error("uvicorn not installed. Run: pip install uvicorn")
