@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TemporalMind — Multi-Agent Time Series Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c14;
+  --surface: #0d1520;
+  --surface2: #111d2e;
+  --border: #1e3048;
+  --border2: #2a4060;
+  --accent: #00d4ff;
+  --accent2: #ff6b35;
+  --accent3: #7c3aed;
+  --accent4: #10b981;
+  --accent5: #f59e0b;
+  --text: #e2eaf4;
+  --text2: #8ba3be;
+  --text3: #4d6a88;
+  --glow: 0 0 30px rgba(0,212,255,0.15);
+  --glow2: 0 0 30px rgba(255,107,53,0.15);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Background grid */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events:none;
+  z-index:0;
+}
+
+.container { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:0 24px; }
+
+/* ─── HEADER ─── */
+header {
+  padding: 28px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 40px;
+}
+.header-inner { display:flex; align-items:center; justify-content:space-between; }
+.logo { display:flex; align-items:center; gap:12px; }
+.logo-icon {
+  width:40px; height:40px;
+  background: linear-gradient(135deg, var(--accent), var(--accent3));
+  border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px;
+}
+.logo-text { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; letter-spacing:-0.5px; }
+.logo-text span { color: var(--accent); }
+.badge {
+  font-family:'Space Mono',monospace; font-size:10px;
+  background: rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3);
+  color:var(--accent); padding:3px 10px; border-radius:20px; letter-spacing:1px;
+}
+
+/* ─── SECTION TITLES ─── */
+.section-title {
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+  letter-spacing:3px; text-transform:uppercase; color:var(--text3);
+  margin-bottom:20px;
+  display:flex; align-items:center; gap:10px;
+}
+.section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* ─── ARCHITECTURE DIAGRAM ─── */
+.arch-section { margin-bottom:60px; }
+
+.arch-diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius:16px;
+  padding:36px;
+  position:relative;
+  overflow:hidden;
+}
+.arch-diagram::before {
+  content:'';
+  position:absolute;
+  top:-60px; right:-60px;
+  width:200px; height:200px;
+  background: radial-gradient(circle, rgba(0,212,255,0.06), transparent 70%);
+  pointer-events:none;
+}
+
+.arch-title {
+  font-family:'Syne',sans-serif; font-size:26px; font-weight:800;
+  margin-bottom:6px; letter-spacing:-0.5px;
+}
+.arch-title em { color:var(--accent); font-style:normal; }
+.arch-subtitle { color:var(--text2); font-size:14px; margin-bottom:36px; max-width:700px; line-height:1.6; }
+
+/* Pipeline flow */
+.pipeline {
+  display:flex; align-items:stretch; gap:0;
+  overflow-x:auto; padding-bottom:8px;
+}
+
+.pipe-stage {
+  flex:1; min-width:160px;
+  background: var(--surface2);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:18px 16px;
+  position:relative;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  cursor:default;
+}
+.pipe-stage:hover { border-color:var(--border2); box-shadow: var(--glow); }
+
+.pipe-stage + .pipe-stage { margin-left:0; }
+
+.pipe-arrow {
+  display:flex; align-items:center; padding:0 8px;
+  color:var(--text3); font-size:18px; flex-shrink:0;
+}
+
+.pipe-num {
+  font-family:'Space Mono',monospace; font-size:10px;
+  color:var(--text3); margin-bottom:10px;
+}
+.pipe-icon { font-size:22px; margin-bottom:8px; }
+.pipe-name {
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+  margin-bottom:6px; letter-spacing:-0.2px;
+}
+.pipe-desc { font-size:11px; color:var(--text2); line-height:1.5; }
+
+.pipe-tag {
+  display:inline-block; margin-top:8px;
+  font-family:'Space Mono',monospace; font-size:9px;
+  padding:2px 7px; border-radius:4px;
+  border:1px solid;
+}
+.tag-ingest { color:#00d4ff; border-color:rgba(0,212,255,0.3); background:rgba(0,212,255,0.05); }
+.tag-agent  { color:#7c3aed; border-color:rgba(124,58,237,0.3); background:rgba(124,58,237,0.05); }
+.tag-analysis { color:#10b981; border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.05); }
+.tag-prep  { color:#f59e0b; border-color:rgba(245,158,11,0.3); background:rgba(245,158,11,0.05); }
+.tag-output{ color:#ff6b35; border-color:rgba(255,107,53,0.3); background:rgba(255,107,53,0.05); }
+
+/* ─── AGENTS GRID ─── */
+.agents-section { margin-bottom:60px; }
+.agents-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(340px,1fr)); gap:20px; }
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius:14px;
+  padding:24px;
+  position:relative;
+  overflow:hidden;
+  transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
+}
+.agent-card:hover { transform:translateY(-2px); }
+.agent-card::before {
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0; height:2px;
+}
+.agent-card.c-ingest::before  { background:linear-gradient(90deg,var(--accent),transparent); }
+.agent-card.c-accum::before   { background:linear-gradient(90deg,var(--accent3),transparent); }
+.agent-card.c-aggr::before    { background:linear-gradient(90deg,var(--accent4),transparent); }
+.agent-card.c-interval::before{ background:linear-gradient(90deg,var(--accent5),transparent); }
+.agent-card.c-analysis::before{ background:linear-gradient(90deg,#ec4899,transparent); }
+.agent-card.c-prep::before    { background:linear-gradient(90deg,var(--accent2),transparent); }
+.agent-card.c-hier::before    { background:linear-gradient(90deg,#06b6d4,transparent); }
+.agent-card.c-outlier::before { background:linear-gradient(90deg,#ef4444,transparent); }
+.agent-card.c-missing::before { background:linear-gradient(90deg,#84cc16,transparent); }
+.agent-card.c-orch::before    { background:linear-gradient(90deg,var(--accent),var(--accent3)); }
+
+.agent-card:hover { border-color:var(--border2); box-shadow:0 8px 32px rgba(0,0,0,0.4); }
+
+.agent-header { display:flex; align-items:flex-start; gap:14px; margin-bottom:16px; }
+.agent-icon {
+  width:44px; height:44px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; flex-shrink:0;
+}
+.icon-ingest   { background:rgba(0,212,255,0.12); }
+.icon-accum    { background:rgba(124,58,237,0.12); }
+.icon-aggr     { background:rgba(16,185,129,0.12); }
+.icon-interval { background:rgba(245,158,11,0.12); }
+.icon-analysis { background:rgba(236,72,153,0.12); }
+.icon-prep     { background:rgba(255,107,53,0.12); }
+.icon-hier     { background:rgba(6,182,212,0.12); }
+.icon-outlier  { background:rgba(239,68,68,0.12); }
+.icon-missing  { background:rgba(132,204,22,0.12); }
+.icon-orch     { background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(124,58,237,0.15)); }
+
+.agent-meta { flex:1; }
+.agent-name {
+  font-family:'Syne',sans-serif; font-size:15px; font-weight:700;
+  margin-bottom:2px; letter-spacing:-0.2px;
+}
+.agent-role { font-size:11px; color:var(--text2); font-family:'Space Mono',monospace; }
+
+.agent-desc { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:16px; }
+
+.agent-caps { display:flex; flex-wrap:wrap; gap:6px; }
+.cap {
+  font-size:11px; padding:3px 10px; border-radius:6px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--border);
+  color:var(--text2);
+}
+
+.agent-io {
+  margin-top:14px; padding-top:14px;
+  border-top: 1px solid var(--border);
+  display:grid; grid-template-columns:1fr 1fr; gap:8px;
+}
+.io-block { font-size:11px; }
+.io-label { color:var(--text3); font-family:'Space Mono',monospace; font-size:10px; margin-bottom:4px; }
+.io-val { color:var(--text); }
+
+/* ─── KEY CONCEPTS ─── */
+.concepts-section { margin-bottom:60px; }
+.concepts-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+
+.concept-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:22px;
+}
+.concept-icon { font-size:28px; margin-bottom:12px; }
+.concept-name {
+  font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  margin-bottom:8px;
+}
+.concept-body { font-size:12px; color:var(--text2); line-height:1.65; }
+.concept-formula {
+  margin-top:12px;
+  font-family:'Space Mono',monospace; font-size:11px;
+  color:var(--accent); background:rgba(0,212,255,0.06);
+  padding:10px 12px; border-radius:8px; border-left:2px solid var(--accent);
+}
+
+/* ─── HIERARCHY VISUAL ─── */
+.hierarchy-section { margin-bottom:60px; }
+.hier-diagram {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:32px;
+}
+.hier-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; margin-bottom:6px; }
+.hier-sub { font-size:13px; color:var(--text2); margin-bottom:30px; }
+
+.hier-tree {
+  display:flex; flex-direction:column; align-items:center; gap:0;
+  font-family:'Space Mono',monospace;
+}
+
+.hier-level { display:flex; gap:16px; align-items:center; justify-content:center; margin-bottom:0; }
+.hier-node {
+  padding:10px 18px; border-radius:8px;
+  font-size:12px; text-align:center;
+  border:1px solid; position:relative;
+}
+.hier-node.l0 { background:rgba(0,212,255,0.1); border-color:rgba(0,212,255,0.4); color:var(--accent); font-weight:700; }
+.hier-node.l1 { background:rgba(124,58,237,0.1); border-color:rgba(124,58,237,0.4); color:#a78bfa; }
+.hier-node.l2 { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.4); color:#6ee7b7; font-size:11px; }
+.hier-node.l3 { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.4); color:#fcd34d; font-size:10px; }
+
+.hier-connector {
+  display:flex; justify-content:center; align-items:center;
+  height:28px; width:100%;
+  position:relative;
+}
+.hier-connector svg { overflow:visible; }
+
+.hier-agg-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  margin-top:4px; padding:2px 8px;
+  background:rgba(255,255,255,0.05); border-radius:20px;
+  font-size:9px; color:var(--text3); letter-spacing:0.5px;
+}
+
+.method-tabs { display:flex; gap:8px; margin-top:20px; flex-wrap:wrap; }
+.method-tab {
+  padding:6px 14px; border-radius:6px; font-size:12px;
+  border:1px solid var(--border); color:var(--text2); cursor:pointer;
+  transition:all 0.2s; background:transparent;
+}
+.method-tab.active { background:rgba(0,212,255,0.1); border-color:var(--accent); color:var(--accent); }
+
+/* ─── DATA FLOW DETAILS ─── */
+.dataflow-section { margin-bottom:60px; }
+.dataflow-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.flow-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:24px;
+}
+.flow-card-title {
+  font-family:'Syne',sans-serif; font-size:15px; font-weight:700;
+  margin-bottom:16px; display:flex; align-items:center; gap:8px;
+}
+.flow-steps { display:flex; flex-direction:column; gap:8px; }
+.flow-step {
+  display:flex; gap:12px; align-items:flex-start;
+  padding:10px 12px; background:var(--surface2);
+  border-radius:8px; border:1px solid var(--border);
+}
+.step-num {
+  width:22px; height:22px; border-radius:50%;
+  background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3);
+  color:var(--accent); font-family:'Space Mono',monospace; font-size:10px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.step-text { font-size:12px; color:var(--text2); line-height:1.5; }
+.step-text strong { color:var(--text); font-weight:500; }
+
+/* ─── ANALYSIS MATRIX ─── */
+.matrix-section { margin-bottom:60px; }
+.matrix-table {
+  width:100%; border-collapse:collapse;
+  background:var(--surface); border-radius:12px;
+  overflow:hidden; border:1px solid var(--border);
+}
+.matrix-table th {
+  padding:12px 16px; text-align:left;
+  background:var(--surface2); border-bottom:1px solid var(--border);
+  font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
+  color:var(--text2); letter-spacing:0.5px;
+}
+.matrix-table td {
+  padding:10px 16px; border-bottom:1px solid var(--border);
+  font-size:12px; color:var(--text2); vertical-align:top;
+}
+.matrix-table tr:last-child td { border-bottom:none; }
+.matrix-table tr:hover td { background:rgba(255,255,255,0.02); }
+.td-name { color:var(--text); font-weight:500; }
+.td-agent { color:var(--accent3); font-family:'Space Mono',monospace; font-size:11px; }
+.status-dot {
+  display:inline-block; width:7px; height:7px;
+  border-radius:50%; margin-right:5px;
+}
+
+/* ─── TECH STACK ─── */
+.tech-section { margin-bottom:60px; }
+.tech-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.tech-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:16px;
+  text-align:center; transition:border-color 0.3s;
+}
+.tech-card:hover { border-color:var(--border2); }
+.tech-icon { font-size:26px; margin-bottom:8px; }
+.tech-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; margin-bottom:4px; }
+.tech-desc { font-size:11px; color:var(--text3); }
+
+/* ─── INTERACTION DIAGRAM ─── */
+.interact-section { margin-bottom:60px; }
+.interact-diagram {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:32px;
+}
+.interact-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:20px; }
+.interact-node {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:10px; padding:16px; text-align:center;
+  position:relative;
+}
+.interact-node-name {
+  font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+  margin-bottom:4px;
+}
+.interact-node-type { font-size:10px; color:var(--text3); font-family:'Space Mono',monospace; }
+.interact-arrows { display:flex; flex-direction:column; gap:6px; margin-top:16px; }
+.i-arrow {
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:var(--text2);
+}
+.i-arrow-line {
+  flex:1; height:1px;
+  background:linear-gradient(90deg, var(--border2), transparent);
+}
+.i-arrow-head { color:var(--accent); font-size:10px; }
+
+/* ─── FOOTER ─── */
+footer {
+  border-top:1px solid var(--border); padding:28px 0;
+  text-align:center; font-size:12px; color:var(--text3);
+}
+footer span { color:var(--accent); }
+
+/* responsive */
+@media(max-width:900px) {
+  .concepts-grid { grid-template-columns:1fr 1fr; }
+  .tech-grid { grid-template-columns:repeat(2,1fr); }
+  .dataflow-grid { grid-template-columns:1fr; }
+  .interact-grid { grid-template-columns:1fr; }
+}
+@media(max-width:600px) {
+  .pipeline { flex-direction:column; }
+  .pipe-arrow { transform:rotate(90deg); justify-content:center; }
+  .concepts-grid { grid-template-columns:1fr; }
+  .agents-grid { grid-template-columns:1fr; }
+}
+
+/* animations */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.pulse { animation:pulse 2s infinite; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.agent-card { animation: fadeIn 0.5s ease both; }
+.agent-card:nth-child(1){animation-delay:0.05s}
+.agent-card:nth-child(2){animation-delay:0.10s}
+.agent-card:nth-child(3){animation-delay:0.15s}
+.agent-card:nth-child(4){animation-delay:0.20s}
+.agent-card:nth-child(5){animation-delay:0.25s}
+.agent-card:nth-child(6){animation-delay:0.30s}
+.agent-card:nth-child(7){animation-delay:0.35s}
+.agent-card:nth-child(8){animation-delay:0.40s}
+.agent-card:nth-child(9){animation-delay:0.45s}
+.agent-card:nth-child(10){animation-delay:0.50s}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- HEADER -->
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">⧖</div>
+      <div class="logo-text">Temporal<span>Mind</span></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="badge">MULTI-AGENT</span>
+      <span class="badge" style="color:var(--accent4);border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);">SYSTEM DESIGN</span>
+    </div>
+  </div>
+</header>
+
+<!-- ARCHITECTURE OVERVIEW -->
+<div class="arch-section">
+  <div class="section-title">System Overview</div>
+  <div class="arch-diagram">
+    <div class="arch-title">Multi-Agent Time Series <em>Intelligence Platform</em></div>
+    <div class="arch-subtitle">
+      A hierarchical, orchestrated agent system that ingests raw time series data (CSV/Excel/JSON),
+      performs temporal accumulation across the time axis, spatial aggregation across hierarchy levels,
+      and delivers full decomposition analysis with forecast-ready outputs.
+    </div>
+
+    <div class="pipeline">
+      <div class="pipe-stage">
+        <div class="pipe-num">01</div>
+        <div class="pipe-icon">📥</div>
+        <div class="pipe-name">Data Ingestion</div>
+        <div class="pipe-desc">Load CSV, Excel, JSON. Schema validation, column mapping, type coercion.</div>
+        <div><span class="pipe-tag tag-ingest">INGEST</span></div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">02</div>
+        <div class="pipe-icon">🧬</div>
+        <div class="pipe-name">Interval Advisor</div>
+        <div class="pipe-desc">Detect native frequency, suggest optimal analysis interval via spectral & variance analysis.</div>
+        <div><span class="pipe-tag tag-agent">AGENT</span></div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">03</div>
+        <div class="pipe-icon">⏱</div>
+        <div class="pipe-name">Accumulation</div>
+        <div class="pipe-desc">Resample across time axis — sum, mean, last, OHLC, custom. Handles gaps.</div>
+        <div><span class="pipe-tag tag-agent">AGENT</span></div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">04</div>
+        <div class="pipe-icon">🌲</div>
+        <div class="pipe-name">Hierarchy</div>
+        <div class="pipe-desc">Aggregate leaf series up the tree. Sum/avg/weighted methods per level.</div>
+        <div><span class="pipe-tag tag-agent">AGENT</span></div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">05</div>
+        <div class="pipe-icon">🔍</div>
+        <div class="pipe-name">Analysis</div>
+        <div class="pipe-desc">Trend, seasonality, cycle, outliers, missing values, intermittency decomposition.</div>
+        <div><span class="pipe-tag tag-analysis">ANALYSIS</span></div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">06</div>
+        <div class="pipe-icon">⚙️</div>
+        <div class="pipe-name">Preparation</div>
+        <div class="pipe-desc">Imputation, normalization, feature engineering, train/test split. Forecast-ready.</div>
+        <div><span class="pipe-tag tag-prep">PREP</span></div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">07</div>
+        <div class="pipe-icon">📊</div>
+        <div class="pipe-name">Output</div>
+        <div class="pipe-desc">Structured dataset, analysis report, metadata JSON, model-ready tensors.</div>
+        <div><span class="pipe-tag tag-output">OUTPUT</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AGENTS GRID -->
+<div class="agents-section">
+  <div class="section-title">Agent Catalog</div>
+  <div class="agents-grid">
+
+    <!-- Orchestrator -->
+    <div class="agent-card c-orch" style="grid-column:span 1;">
+      <div class="agent-header">
+        <div class="agent-icon icon-orch">🧠</div>
+        <div class="agent-meta">
+          <div class="agent-name">Orchestrator Agent</div>
+          <div class="agent-role">MASTER CONTROLLER</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Central coordinator that receives user intent, decomposes tasks, dispatches sub-agents in the right sequence,
+        collects results, resolves conflicts, and produces the unified output. Uses a ReAct loop — Reason → Act → Observe.
+        Maintains a shared state store (context graph) accessible to all agents.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">Task DAG planning</span>
+        <span class="cap">Agent dispatch</span>
+        <span class="cap">State management</span>
+        <span class="cap">Conflict resolution</span>
+        <span class="cap">Retry logic</span>
+        <span class="cap">Progress reporting</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">User query + raw data reference</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Orchestrated pipeline result</div></div>
+      </div>
+    </div>
+
+    <!-- Ingest Agent -->
+    <div class="agent-card c-ingest">
+      <div class="agent-header">
+        <div class="agent-icon icon-ingest">📥</div>
+        <div class="agent-meta">
+          <div class="agent-name">Data Ingestion Agent</div>
+          <div class="agent-role">SOURCE CONNECTOR</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Loads data from CSV, Excel (.xlsx/.xls), JSON APIs, and SQL sources. Performs schema inference,
+        datetime parsing, column identification (timestamp, value, hierarchy keys), and converts everything
+        to a canonical internal format for downstream agents.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">CSV / Excel</span>
+        <span class="cap">REST JSON</span>
+        <span class="cap">Schema detect</span>
+        <span class="cap">Datetime parse</span>
+        <span class="cap">Type coercion</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">File path / API endpoint</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Canonical DataFrame + metadata</div></div>
+      </div>
+    </div>
+
+    <!-- Interval Advisor Agent -->
+    <div class="agent-card c-interval">
+      <div class="agent-header">
+        <div class="agent-icon icon-interval">🕐</div>
+        <div class="agent-meta">
+          <div class="agent-name">Interval Advisor Agent</div>
+          <div class="agent-role">FREQUENCY INTELLIGENCE</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Analyzes the native timestamp distribution to detect existing frequency. Uses FFT, autocorrelation,
+        and variance-ratio tests to recommend the best analysis intervals. Shows the trade-off between
+        granularity and noise across multiple candidate intervals.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">FFT analysis</span>
+        <span class="cap">Autocorrelation</span>
+        <span class="cap">Gap detection</span>
+        <span class="cap">Interval scoring</span>
+        <span class="cap">Multi-interval compare</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Raw timestamps + values</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Ranked interval recommendations</div></div>
+      </div>
+    </div>
+
+    <!-- Accumulation Agent -->
+    <div class="agent-card c-accum">
+      <div class="agent-header">
+        <div class="agent-icon icon-accum">⏱</div>
+        <div class="agent-meta">
+          <div class="agent-name">Temporal Accumulation Agent</div>
+          <div class="agent-role">TIME-AXIS RESAMPLER</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Resamples series along the time axis to a target interval. Supports sum, mean, median, last, first,
+        OHLC (open-high-low-close), and custom aggregation functions. Handles irregular timestamps, DST,
+        and missing periods. Produces accumulation-comparison reports across intervals.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">Sum / Mean / Median</span>
+        <span class="cap">Last / First / OHLC</span>
+        <span class="cap">Irregular timestamps</span>
+        <span class="cap">DST awareness</span>
+        <span class="cap">Period comparison</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Raw series + target interval</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Resampled series (multiple freqs)</div></div>
+      </div>
+    </div>
+
+    <!-- Hierarchy Aggregation Agent -->
+    <div class="agent-card c-hier">
+      <div class="agent-header">
+        <div class="agent-icon icon-hier">🌲</div>
+        <div class="agent-meta">
+          <div class="agent-name">Hierarchy Aggregation Agent</div>
+          <div class="agent-role">CROSS-LEVEL AGGREGATOR</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Builds a tree from leaf series using hierarchy key columns. Aggregates values upward
+        (leaf → mid → top) using sum, weighted average, proportional, or custom methods.
+        Shows the effect of aggregation at each level. Validates coherence (top-down reconciliation).
+      </div>
+      <div class="agent-caps">
+        <span class="cap">Tree construction</span>
+        <span class="cap">Sum aggregation</span>
+        <span class="cap">Weighted average</span>
+        <span class="cap">Proportional</span>
+        <span class="cap">Coherence check</span>
+        <span class="cap">Level comparison</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Leaf series + hierarchy map</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Series at all hierarchy levels</div></div>
+      </div>
+    </div>
+
+    <!-- Analysis Agent -->
+    <div class="agent-card c-analysis">
+      <div class="agent-header">
+        <div class="agent-icon icon-analysis">🔍</div>
+        <div class="agent-meta">
+          <div class="agent-name">Decomposition Analysis Agent</div>
+          <div class="agent-role">PATTERN EXTRACTOR</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Performs classical and statistical decomposition: STL/X13 decomposition, trend estimation
+        (HP filter, LOESS), seasonality detection (multiple), cycle isolation (Hodrick-Prescott),
+        and Fourier-based period identification. Generates a component report per series.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">STL decomposition</span>
+        <span class="cap">X13-ARIMA-SEATS</span>
+        <span class="cap">LOESS trend</span>
+        <span class="cap">HP filter</span>
+        <span class="cap">Fourier periods</span>
+        <span class="cap">Seasonal strength</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Cleaned series</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Trend + Season + Cycle + Residual</div></div>
+      </div>
+    </div>
+
+    <!-- Outlier Detection Agent -->
+    <div class="agent-card c-outlier">
+      <div class="agent-header">
+        <div class="agent-icon icon-outlier">⚡</div>
+        <div class="agent-meta">
+          <div class="agent-name">Outlier Detection Agent</div>
+          <div class="agent-role">ANOMALY SPOTTER</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Detects point, contextual, and collective anomalies using IQR, Z-score, Isolation Forest,
+        DBSCAN, and LOF methods. Tags outliers with severity scores and suggested treatments
+        (cap, remove, impute). Works on residuals post-decomposition for higher precision.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">IQR / Z-score</span>
+        <span class="cap">Isolation Forest</span>
+        <span class="cap">DBSCAN</span>
+        <span class="cap">LOF</span>
+        <span class="cap">Contextual detection</span>
+        <span class="cap">Severity scoring</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Series + decomposed residuals</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Outlier map + treatment suggestions</div></div>
+      </div>
+    </div>
+
+    <!-- Missing Values Agent -->
+    <div class="agent-card c-missing">
+      <div class="agent-header">
+        <div class="agent-icon icon-missing">🕳</div>
+        <div class="agent-meta">
+          <div class="agent-name">Missing Values Agent</div>
+          <div class="agent-role">GAP INTERPRETER</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Classifies missing data patterns: MCAR, MAR, MNAR. Distinguishes true zeros from missing.
+        Applies spline interpolation, KNN imputation, seasonal decomposition-based fill, forward/back fill,
+        and structural imputation. Generates a data completeness report.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">MCAR/MAR/MNAR</span>
+        <span class="cap">Spline interpolation</span>
+        <span class="cap">KNN imputation</span>
+        <span class="cap">Seasonal fill</span>
+        <span class="cap">Zero vs NaN</span>
+        <span class="cap">Completeness report</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Series with gaps</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Imputed series + gap analysis</div></div>
+      </div>
+    </div>
+
+    <!-- Intermittency Agent -->
+    <div class="agent-card c-accum" style="--c:#f59e0b">
+      <div class="agent-header">
+        <div class="agent-icon icon-interval">💤</div>
+        <div class="agent-meta">
+          <div class="agent-name">Intermittency Agent</div>
+          <div class="agent-role">DEMAND CLASSIFIER</div>
+        </div>
+      </div>
+      <div class="agent-desc">
+        Detects intermittent demand patterns using ADI (Average Demand Interval) and CV² (squared coefficient
+        of variation). Classifies series as Smooth, Erratic, Intermittent, or Lumpy (Syntetos-Boylan).
+        Recommends appropriate forecasting models for each class.
+      </div>
+      <div class="agent-caps">
+        <span class="cap">ADI calculation</span>
+        <span class="cap">CV² scoring</span>
+        <span class="cap">Syntetos-Boylan</span>
+        <span class="cap">Croston method</span>
+        <span class="cap">Model recommender</span>
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Demand series</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Classification + model advice</div></div>
+      </div>
+    </div>
+
+    <!-- Data Prep Agent -->
+    <div class="agent-card c-prep">
+      <div class="agent-header">
+        <div class="agent-icon icon-prep">⚙️</div>
+        <div class="agent-meta">
+          <div class="agent-name">Data Preparation Agent</div>
+          <div class="agent-role">FORECAST TRANSFORMER</div>
+        </div>
+      </div>
+      <div class="agent-caps">
+        <span class="cap">Normalization</span>
+        <span class="cap">Differencing</span>
+        <span class="cap">Log transform</span>
+        <span class="cap">Lag features</span>
+        <span class="cap">Calendar features</span>
+        <span class="cap">Train/test split</span>
+        <span class="cap">Sliding window</span>
+        <span class="cap">Tensor output</span>
+      </div>
+      <div class="agent-desc" style="margin-top:12px">
+        Transforms clean, analyzed series into model-ready format. Applies stationarity transforms
+        (differencing, log, Box-Cox), creates lag features, rolling statistics, and calendar encodings
+        (week-of-year, holidays, day-of-week dummies). Outputs train/validation/test splits.
+      </div>
+      <div class="agent-io">
+        <div class="io-block"><div class="io-label">INPUT</div><div class="io-val">Cleaned + analyzed series</div></div>
+        <div class="io-block"><div class="io-label">OUTPUT</div><div class="io-val">Feature matrix + splits + scalers</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- KEY CONCEPTS -->
+<div class="concepts-section">
+  <div class="section-title">Core Distinctions</div>
+  <div class="concepts-grid">
+
+    <div class="concept-card">
+      <div class="concept-icon">⏱</div>
+      <div class="concept-name">Temporal Accumulation</div>
+      <div class="concept-body">
+        Operates along the <strong>time axis</strong>. Collapses fine-grained observations into coarser
+        time buckets. A daily series becomes weekly by summing (for flow quantities like sales) or averaging
+        (for stock quantities like inventory). Preserves total mass or average level as appropriate.
+      </div>
+      <div class="concept-formula">y_W = Σ y_d  for d ∈ week  (flow)<br>y_W = avg(y_d) for d ∈ week  (stock)</div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-icon">🌲</div>
+      <div class="concept-name">Hierarchy Aggregation</div>
+      <div class="concept-body">
+        Operates <strong>across series</strong> (cross-sectional). Leaf series (SKU, store, region)
+        are aggregated upward through a tree structure. Parent nodes are derived from children using sum,
+        weighted mean, or proportional allocation. Ensures top-down coherence.
+      </div>
+      <div class="concept-formula">y_parent,t = Σ y_child_i,t  (additive)<br>y_parent,t = Σ w_i · y_child_i,t  (weighted)</div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-icon">🔀</div>
+      <div class="concept-name">Combined Operations</div>
+      <div class="concept-body">
+        Both operations are orthogonal and can be applied together. First accumulate each leaf series
+        to the desired interval, then aggregate across the hierarchy. Order matters: accumulate first
+        ensures temporal consistency before spatial aggregation.
+      </div>
+      <div class="concept-formula">Step 1: y_leaf,W = accum(y_leaf,d)<br>Step 2: y_total,W = Σ y_leaf,W</div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-icon">📉</div>
+      <div class="concept-name">Decomposition</div>
+      <div class="concept-body">
+        Separates a time series into interpretable components. Additive model assumes components add up;
+        multiplicative model assumes they multiply. STL (Seasonal-Trend decomposition using LOESS) is
+        robust to outliers and handles multiple seasonal periods.
+      </div>
+      <div class="concept-formula">Additive:  y_t = T_t + S_t + C_t + R_t<br>Multiplicative: y_t = T_t × S_t × C_t × R_t</div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-icon">💤</div>
+      <div class="concept-name">Intermittency (ADI/CV²)</div>
+      <div class="concept-body">
+        ADI = average interval between non-zero demands. CV² = variance of non-zero demand size.
+        Series with ADI > 1.32 and CV² < 0.49 are Intermittent. High ADI + high CV² = Lumpy.
+        Each class needs different forecasting treatment.
+      </div>
+      <div class="concept-formula">ADI = n_periods / n_nonzero<br>CV² = (σ_nz / μ_nz)²</div>
+    </div>
+
+    <div class="concept-card">
+      <div class="concept-icon">📡</div>
+      <div class="concept-name">Interval Recommendation</div>
+      <div class="concept-body">
+        The system scores candidate intervals by: (1) dominant spectral frequency alignment, (2) signal-to-noise ratio
+        after resampling, (3) autocorrelation decay rate, and (4) minimum periods needed for reliable decomposition (≥2 full cycles).
+      </div>
+      <div class="concept-formula">score(f) = SNR(f) × ACF_score(f) × coverage(f)<br>→ top-3 intervals recommended</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- HIERARCHY VISUAL -->
+<div class="hierarchy-section">
+  <div class="section-title">Hierarchy Visualization</div>
+  <div class="hier-diagram">
+    <div class="hier-title">Example: Retail Sales Hierarchy</div>
+    <div class="hier-sub">Values propagate from leaf (SKU×Store) upward. Aggregation method shown per level edge.</div>
+
+    <div class="hier-tree">
+      <!-- Level 0: Total -->
+      <div class="hier-level">
+        <div class="hier-node l0">
+          Total Company<br>
+          <small>y = Σ all regions</small>
+          <div class="hier-agg-badge">⬆ SUM ← Regions</div>
+        </div>
+      </div>
+
+      <!-- Connector L0→L1 -->
+      <div class="hier-connector">
+        <svg width="500" height="28" viewBox="0 0 500 28">
+          <line x1="250" y1="0" x2="100" y2="28" stroke="#2a4060" stroke-width="1.5"/>
+          <line x1="250" y1="0" x2="250" y2="28" stroke="#2a4060" stroke-width="1.5"/>
+          <line x1="250" y1="0" x2="400" y2="28" stroke="#2a4060" stroke-width="1.5"/>
+        </svg>
+      </div>
+
+      <!-- Level 1: Region -->
+      <div class="hier-level">
+        <div class="hier-node l1">Region: North<br><small>y = Σ stores</small><div class="hier-agg-badge">⬆ SUM ← Stores</div></div>
+        <div class="hier-node l1">Region: Central<br><small>y = Σ stores</small><div class="hier-agg-badge">⬆ SUM ← Stores</div></div>
+        <div class="hier-node l1">Region: South<br><small>y = Σ stores</small><div class="hier-agg-badge">⬆ SUM ← Stores</div></div>
+      </div>
+
+      <!-- Connector L1→L2 -->
+      <div class="hier-connector" style="height:32px;">
+        <svg width="700" height="32" viewBox="0 0 700 32">
+          <line x1="115" y1="0" x2="75" y2="32" stroke="#2a4060" stroke-width="1"/>
+          <line x1="115" y1="0" x2="155" y2="32" stroke="#2a4060" stroke-width="1"/>
+          <line x1="350" y1="0" x2="310" y2="32" stroke="#2a4060" stroke-width="1"/>
+          <line x1="350" y1="0" x2="390" y2="32" stroke="#2a4060" stroke-width="1"/>
+          <line x1="580" y1="0" x2="540" y2="32" stroke="#2a4060" stroke-width="1"/>
+          <line x1="580" y1="0" x2="620" y2="32" stroke="#2a4060" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <!-- Level 2: Store -->
+      <div class="hier-level" style="flex-wrap:wrap;gap:10px;">
+        <div class="hier-node l2">Store A<br><small>y = Σ SKUs</small></div>
+        <div class="hier-node l2">Store B<br><small>y = Σ SKUs</small></div>
+        <div class="hier-node l2">Store C<br><small>y = Σ SKUs</small></div>
+        <div class="hier-node l2">Store D<br><small>y = Σ SKUs</small></div>
+        <div class="hier-node l2">Store E<br><small>y = Σ SKUs</small></div>
+        <div class="hier-node l2">Store F<br><small>y = Σ SKUs</small></div>
+      </div>
+
+      <!-- Connector L2→L3 -->
+      <div class="hier-connector" style="height:20px; opacity:0.5">
+        <svg width="100%" height="20"><line x1="50%" y1="0" x2="50%" y2="20" stroke="#2a4060" stroke-dasharray="4"/></svg>
+      </div>
+
+      <!-- Level 3: Leaves -->
+      <div class="hier-level" style="flex-wrap:wrap;gap:8px;max-width:900px">
+        <div class="hier-node l3">SKU-001</div>
+        <div class="hier-node l3">SKU-002</div>
+        <div class="hier-node l3">SKU-003</div>
+        <div class="hier-node l3" style="opacity:0.5">···</div>
+        <div class="hier-node l3">SKU-N</div>
+        <div style="width:100%;text-align:center;font-size:10px;color:var(--text3);font-family:'Space Mono',monospace;margin-top:4px">
+          LEAF SERIES — Raw observations at finest granularity (SKU × Store × Day)
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:28px; padding-top:20px; border-top:1px solid var(--border)">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text2)">
+        Aggregation Methods Available Per Level:
+      </div>
+      <div class="method-tabs">
+        <button class="method-tab active">Σ Sum (additive)</button>
+        <button class="method-tab">w·Σ Weighted Average</button>
+        <button class="method-tab">∝ Proportional</button>
+        <button class="method-tab">median Robust</button>
+        <button class="method-tab">max Peak</button>
+        <button class="method-tab">ƒ Custom function</button>
+      </div>
+      <div style="margin-top:14px;font-size:12px;color:var(--text3)">
+        The Hierarchy Aggregation Agent computes all levels simultaneously and presents a
+        <strong style="color:var(--text2)">level-comparison report</strong> showing how totals, variance, and seasonal patterns shift as you move up the hierarchy.
+        Coherence validation ensures parent = Σ children at every timestep.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DATA FLOW DETAILS -->
+<div class="dataflow-section">
+  <div class="section-title">Detailed Data Flows</div>
+  <div class="dataflow-grid">
+
+    <div class="flow-card">
+      <div class="flow-card-title"><span>⏱</span> Temporal Accumulation Flow</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="step-num">1</div><div class="step-text"><strong>Receive raw series</strong> — irregular or regular timestamps, any granularity</div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-text"><strong>Validate timestamp index</strong> — parse timezone, detect DST transitions, sort</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-text"><strong>Detect quantity type</strong> — flow (sales, events) vs stock (inventory, price) → determines method</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-text"><strong>Resample to target interval</strong> — e.g., hourly → daily → weekly → monthly</div></div>
+        <div class="flow-step"><div class="step-num">5</div><div class="step-text"><strong>Handle boundaries</strong> — partial periods at start/end, daylight savings gaps</div></div>
+        <div class="flow-step"><div class="step-num">6</div><div class="step-text"><strong>Produce comparison table</strong> — show accumulated values at multiple intervals side by side</div></div>
+        <div class="flow-step"><div class="step-num">7</div><div class="step-text"><strong>Compute information loss metric</strong> — quantify signal lost at each coarser interval</div></div>
+      </div>
+    </div>
+
+    <div class="flow-card">
+      <div class="flow-card-title"><span>🌲</span> Hierarchy Aggregation Flow</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="step-num">1</div><div class="step-text"><strong>Parse hierarchy definition</strong> — from config file (JSON/YAML) or inferred from column names</div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-text"><strong>Identify leaf series</strong> — lowest-level nodes with no children</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-text"><strong>Align timestamps</strong> — ensure all leaves cover the same time range (impute if needed)</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-text"><strong>Aggregate bottom-up</strong> — compute each level from its children using the specified method</div></div>
+        <div class="flow-step"><div class="step-num">5</div><div class="step-text"><strong>Validate coherence</strong> — verify parent_t = Σ children_t at every timestep</div></div>
+        <div class="flow-step"><div class="step-num">6</div><div class="step-text"><strong>Level-effect report</strong> — show how variance, trend, seasonality change per aggregation level</div></div>
+        <div class="flow-step"><div class="step-num">7</div><div class="step-text"><strong>Export all levels</strong> — structured output with level labels for downstream use</div></div>
+      </div>
+    </div>
+
+    <div class="flow-card">
+      <div class="flow-card-title"><span>🔍</span> Analysis Agent Flow</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="step-num">1</div><div class="step-text"><strong>Stationarity test</strong> — ADF, KPSS, PP test. Determine differencing order.</div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-text"><strong>Trend extraction</strong> — LOESS, HP filter, linear regression, structural break detection (Chow test)</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-text"><strong>Seasonal detection</strong> — ACF/PACF plots, periodogram peaks, STL seasonal component</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-text"><strong>Cycle isolation</strong> — Hodrick-Prescott or Baxter-King bandpass filter for business cycles</div></div>
+        <div class="flow-step"><div class="step-num">5</div><div class="step-text"><strong>Residual analysis</strong> — Ljung-Box test, normality test, heteroskedasticity check (ARCH)</div></div>
+        <div class="flow-step"><div class="step-num">6</div><div class="step-text"><strong>Component strengths</strong> — Fs (seasonal strength) and Ft (trend strength) metrics (0–1)</div></div>
+      </div>
+    </div>
+
+    <div class="flow-card">
+      <div class="flow-card-title"><span>⚙️</span> Data Preparation Flow</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="step-num">1</div><div class="step-text"><strong>Apply transforms</strong> — log(1+y), Box-Cox (λ optimized), first/seasonal differencing</div></div>
+        <div class="flow-step"><div class="step-num">2</div><div class="step-text"><strong>Scale / normalize</strong> — MinMax, StandardScaler, RobustScaler (for outlier-heavy data)</div></div>
+        <div class="flow-step"><div class="step-num">3</div><div class="step-text"><strong>Create lag features</strong> — y_t-1, y_t-7, y_t-30, y_t-364 based on ACF significant lags</div></div>
+        <div class="flow-step"><div class="step-num">4</div><div class="step-text"><strong>Rolling features</strong> — rolling mean, std, min, max over 7/14/28-period windows</div></div>
+        <div class="flow-step"><div class="step-num">5</div><div class="step-text"><strong>Calendar encoding</strong> — month, day-of-week, week-of-year, is_holiday (Fourier or one-hot)</div></div>
+        <div class="flow-step"><div class="step-num">6</div><div class="step-text"><strong>Train/Val/Test split</strong> — temporal split with configurable horizon. No random shuffle.</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ANALYSIS CAPABILITIES MATRIX -->
+<div class="matrix-section">
+  <div class="section-title">Analysis Capabilities Matrix</div>
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th>Analysis Type</th>
+        <th>Responsible Agent</th>
+        <th>Methods Used</th>
+        <th>Output</th>
+        <th>Handles Hierarchy?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="td-name">Trend</td>
+        <td class="td-agent">DecompositionAgent</td>
+        <td style="font-size:11px;color:var(--text2)">LOESS, HP Filter, linear regression, Theil-Sen (robust), structural break</td>
+        <td style="font-size:11px;color:var(--text2)">Trend component + slope + break dates</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Per level</td>
+      </tr>
+      <tr>
+        <td class="td-name">Seasonality</td>
+        <td class="td-agent">DecompositionAgent</td>
+        <td style="font-size:11px;color:var(--text2)">STL, X-13-ARIMA, Fourier terms, ACF peaks, periodogram</td>
+        <td style="font-size:11px;color:var(--text2)">Seasonal component, period(s), seasonal strength Fs</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Per level</td>
+      </tr>
+      <tr>
+        <td class="td-name">Business Cycle</td>
+        <td class="td-agent">DecompositionAgent</td>
+        <td style="font-size:11px;color:var(--text2)">Hodrick-Prescott, Baxter-King bandpass, Christiano-Fitzgerald</td>
+        <td style="font-size:11px;color:var(--text2)">Cycle component, cycle duration estimate</td>
+        <td style="text-align:center"><span style="color:var(--accent5)">≈</span> Aggregated</td>
+      </tr>
+      <tr>
+        <td class="td-name">Intermittency</td>
+        <td class="td-agent">IntermittencyAgent</td>
+        <td style="font-size:11px;color:var(--text2)">ADI, CV², Syntetos-Boylan matrix, zero-inflated detection</td>
+        <td style="font-size:11px;color:var(--text2)">Classification label + model recommendation</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Leaf level</td>
+      </tr>
+      <tr>
+        <td class="td-name">Outlier Detection</td>
+        <td class="td-agent">OutlierAgent</td>
+        <td style="font-size:11px;color:var(--text2)">IQR, Z-score, Isolation Forest, DBSCAN, LOF, residual-based</td>
+        <td style="font-size:11px;color:var(--text2)">Outlier timestamps, severity scores, treatment advice</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Per series</td>
+      </tr>
+      <tr>
+        <td class="td-name">Missing Values</td>
+        <td class="td-agent">MissingValuesAgent</td>
+        <td style="font-size:11px;color:var(--text2)">MCAR/MAR/MNAR tests, spline, KNN, seasonal decomp-fill</td>
+        <td style="font-size:11px;color:var(--text2)">Imputed series + gap classification + completeness %</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Per series</td>
+      </tr>
+      <tr>
+        <td class="td-name">Stationarity</td>
+        <td class="td-agent">DecompositionAgent</td>
+        <td style="font-size:11px;color:var(--text2)">ADF, KPSS, Phillips-Perron, ARCH-LM</td>
+        <td style="font-size:11px;color:var(--text2)">d-order, transformation needed, ARCH flag</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Per series</td>
+      </tr>
+      <tr>
+        <td class="td-name">Interval Advisory</td>
+        <td class="td-agent">IntervalAdvisorAgent</td>
+        <td style="font-size:11px;color:var(--text2)">FFT, ACF, spectral density, variance-ratio, period coverage</td>
+        <td style="font-size:11px;color:var(--text2)">Top-3 interval recommendations with scores</td>
+        <td style="text-align:center"><span style="color:var(--accent5)">≈</span> Global</td>
+      </tr>
+      <tr>
+        <td class="td-name">Hierarchy Effects</td>
+        <td class="td-agent">HierarchyAgent</td>
+        <td style="font-size:11px;color:var(--text2)">Level-wise aggregation, variance decomposition, coherence check</td>
+        <td style="font-size:11px;color:var(--text2)">Per-level stats, signal smoothing effect, coherence report</td>
+        <td style="text-align:center"><span style="color:var(--accent4)">✓</span> Core function</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- TECH STACK -->
+<div class="tech-section">
+  <div class="section-title">Recommended Technology Stack</div>
+  <div class="tech-grid">
+    <div class="tech-card"><div class="tech-icon">🐍</div><div class="tech-name">Python Core</div><div class="tech-desc">pandas, numpy, scipy — data manipulation & numerics</div></div>
+    <div class="tech-card"><div class="tech-icon">📊</div><div class="tech-name">statsmodels</div><div class="tech-desc">STL, SARIMAX, ADF, KPSS, HP filter, Chow test</div></div>
+    <div class="tech-card"><div class="tech-icon">🤖</div><div class="tech-name">scikit-learn</div><div class="tech-desc">Isolation Forest, LOF, DBSCAN, KNN imputer, scalers</div></div>
+    <div class="tech-card"><div class="tech-icon">⚡</div><div class="tech-name">Prophet / NeuralForecast</div><div class="tech-desc">Multiple seasonality detection, Fourier decomposition</div></div>
+    <div class="tech-card"><div class="tech-icon">🔗</div><div class="tech-name">LangGraph / AutoGen</div><div class="tech-desc">Agent orchestration, DAG task planning, state management</div></div>
+    <div class="tech-card"><div class="tech-icon">🧠</div><div class="tech-name">LLM (GPT-4 / Claude)</div><div class="tech-desc">Natural language report generation, insight narration</div></div>
+    <div class="tech-card"><div class="tech-icon">💾</div><div class="tech-name">openpyxl / polars</div><div class="tech-desc">High-speed Excel ingestion, lazy CSV evaluation</div></div>
+    <div class="tech-card"><div class="tech-icon">📦</div><div class="tech-name">hts / sktime</div><div class="tech-desc">Hierarchical time series handling, reconciliation</div></div>
+    <div class="tech-card"><div class="tech-icon">🗂</div><div class="tech-name">Pydantic + FastAPI</div><div class="tech-desc">Agent I/O schema validation, REST API layer</div></div>
+    <div class="tech-card"><div class="tech-icon">📈</div><div class="tech-name">Plotly / Altair</div><div class="tech-desc">Interactive decomposition charts, hierarchy views</div></div>
+    <div class="tech-card"><div class="tech-icon">🔄</div><div class="tech-name">Redis / Celery</div><div class="tech-desc">Agent task queue, result caching, async execution</div></div>
+    <div class="tech-card"><div class="tech-icon">🗃</div><div class="tech-name">DuckDB / Parquet</div><div class="tech-desc">Efficient storage of multi-level time series datasets</div></div>
+  </div>
+</div>
+
+<!-- INTERACTION DIAGRAM -->
+<div class="interact-section">
+  <div class="section-title">Agent Communication Model</div>
+  <div class="interact-diagram">
+    <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:6px">Message-Passing Architecture</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:24px">
+      All agents communicate via a shared <strong>Context Store</strong>. The Orchestrator uses a ReAct loop
+      to plan, dispatch, and observe. Agents are stateless — they read from and write to the store,
+      enabling parallel execution and transparent debugging.
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:20px;align-items:start;">
+
+      <!-- Left: Input agents -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:1px">INPUT LAYER</div>
+        <div class="interact-node">
+          <div class="interact-node-name">Ingestion</div>
+          <div class="interact-node-type">SOURCE CONNECTOR</div>
+        </div>
+        <div class="interact-node">
+          <div class="interact-node-name">Interval Advisor</div>
+          <div class="interact-node-type">FREQ DETECTOR</div>
+        </div>
+      </div>
+
+      <!-- Center: Orchestrator + Context Store -->
+      <div style="display:flex;flex-direction:column;gap:12px;align-items:center;">
+        <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:1px;text-align:center">CONTROL LAYER</div>
+        <div style="
+          padding:20px 24px; border-radius:12px; text-align:center; width:100%;
+          background:linear-gradient(135deg,rgba(0,212,255,0.08),rgba(124,58,237,0.08));
+          border:1px solid rgba(0,212,255,0.3);
+        ">
+          <div style="font-size:24px;margin-bottom:8px">🧠</div>
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800">Orchestrator</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">ReAct · DAG · State</div>
+        </div>
+        <div style="
+          padding:14px; border-radius:10px; width:100%; text-align:center;
+          background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25);
+          font-size:12px;
+        ">
+          <div style="color:var(--accent4);font-family:'Syne',sans-serif;font-weight:700;margin-bottom:4px">📋 Context Store</div>
+          <div style="color:var(--text3);font-size:11px">Shared state · Results cache<br>Metadata · Config · Logs</div>
+        </div>
+      </div>
+
+      <!-- Right: Processing agents -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:1px">PROCESSING LAYER</div>
+        <div class="interact-node"><div class="interact-node-name">Accumulation</div><div class="interact-node-type">TIME-AXIS</div></div>
+        <div class="interact-node"><div class="interact-node-name">Hierarchy</div><div class="interact-node-type">CROSS-LEVEL</div></div>
+        <div class="interact-node"><div class="interact-node-name">Decomposition</div><div class="interact-node-type">ANALYSIS</div></div>
+        <div class="interact-node"><div class="interact-node-name">Outlier</div><div class="interact-node-type">ANOMALY</div></div>
+        <div class="interact-node"><div class="interact-node-name">Missing Values</div><div class="interact-node-type">IMPUTATION</div></div>
+        <div class="interact-node"><div class="interact-node-name">Data Prep</div><div class="interact-node-type">TRANSFORMER</div></div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:24px;padding:16px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text2)">Execution Order (default pipeline)</div>
+      <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);line-height:2">
+        Ingest → IntervalAdvisor → [Accumulate ∥ {HierarchyBuild → HierarchyAgg}] →
+        MissingValues → Outlier → Intermittency → Decomposition → DataPrep → Output
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3)">
+        ∥ = parallel execution where dependencies allow. The Orchestrator dynamically adjusts this DAG based on whether the input is a single series or a hierarchy.
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<footer>
+  <div class="container">
+    <strong style="color:var(--text)">TemporalMind</strong> — Multi-Agent Time Series Intelligence Platform
+    &nbsp;·&nbsp; Designed for <span>hierarchical</span> and <span>single-series</span> workflows
+    &nbsp;·&nbsp; Accumulation ↔ Time axis &nbsp;·&nbsp; Aggregation ↔ Hierarchy levels
+  </div>
+</footer>
+
+<script>
+// method tab interactivity
+document.querySelectorAll('.method-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+
+</body>
+</html>
