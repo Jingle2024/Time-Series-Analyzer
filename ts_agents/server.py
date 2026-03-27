@@ -387,6 +387,183 @@ if _HAS_FASTAPI:
             "report": result.metadata.get("report", ""),
         }
 
+
+    # ── Hierarchy tree structure ──────────────────────────────────────────────
+
+    class HierarchyTreeReq(BaseModel):
+        token: str
+
+    @app.post("/api/hierarchy-tree")
+    async def hierarchy_tree(body: HierarchyTreeReq):
+        """
+        Returns hierarchy tree with unique values per level for cascading dropdowns.
+        """
+        sess = _sessions.get(body.token)
+        if not sess or "df" not in sess:
+            raise HTTPException(404, "No ingested data")
+        df: pd.DataFrame = sess["df"]
+        hier_cols = sess.get("hierarchy_cols", [])
+        if not hier_cols:
+            raise HTTPException(400, "No hierarchy columns in this session")
+
+        level_values: Dict[str, List] = {}
+        for col in hier_cols:
+            vals = sorted(df[col].dropna().unique().tolist())
+            level_values[col] = [str(v) for v in vals]
+
+        def build_tree(sub_df: pd.DataFrame, remaining: List[str]) -> Any:
+            if not remaining:
+                return []
+            col = remaining[0]
+            rest = remaining[1:]
+            result = {}
+            for val in sorted(sub_df[col].dropna().unique()):
+                child_df = sub_df[sub_df[col] == val]
+                result[str(val)] = build_tree(child_df, rest)
+            return result
+
+        tree = build_tree(df, hier_cols)
+        total_leaves = len(df.groupby(hier_cols))
+
+        return {
+            "levels": hier_cols,
+            "tree": tree,
+            "level_values": level_values,
+            "total_leaves": total_leaves,
+        }
+
+    # ── Analyze a specific hierarchy node ─────────────────────────────────────
+
+    class AnalyzeNodeReq(BaseModel):
+        token: str
+        node_path: Dict[str, str]
+        value_col: Optional[str] = None
+        period: Optional[int] = None
+        agg_method: str = "sum"
+
+    @app.post("/api/analyze-node")
+    async def analyze_node(body: AnalyzeNodeReq):
+        """
+        Filter df to node_path, aggregate remaining hier levels, run full analysis.
+        """
+        sess = _sessions.get(body.token)
+        if not sess or "df" not in sess:
+            raise HTTPException(404)
+
+        df: pd.DataFrame = sess["df"]
+        hier_cols = sess.get("hierarchy_cols", [])
+        val_cols = sess.get("value_cols", [])
+        val_col = body.value_col or (val_cols[0] if val_cols else None)
+        if not val_col:
+            raise HTTPException(400, "No value column")
+
+        mask = pd.Series([True] * len(df), index=df.index)
+        for col, val in body.node_path.items():
+            if col in df.columns:
+                mask &= (df[col].astype(str) == str(val))
+
+        filtered = df[mask]
+        if len(filtered) == 0:
+            raise HTTPException(404, f"No data found for path: {body.node_path}")
+
+        path_depth = len(body.node_path)
+        total_depth = len(hier_cols)
+        is_leaf = (path_depth == total_depth)
+        node_label = " › ".join(f"{k}={v}" for k, v in body.node_path.items())
+
+        remaining_hier = [c for c in hier_cols if c not in body.node_path]
+        agg_fn = body.agg_method
+
+        if remaining_hier:
+            series = filtered.groupby(level=0)[val_col].agg(agg_fn)
+        else:
+            series = filtered[val_col]
+
+        series = series.sort_index().dropna()
+        series.name = val_col
+        if len(series) < 4:
+            raise HTTPException(400, f"Too few data points ({len(series)}) for: {node_label}")
+
+        ctx = ContextStore()
+        mv_res = MissingValuesAgent(ctx).execute(series=series)
+        clean = mv_res.data["imputed"] if mv_res.ok else series
+
+        decomp_res = DecompositionAgent(ctx).execute(series=clean, period=body.period)
+        residual = decomp_res.data.get("residual") if decomp_res.ok else None
+        out_res = OutlierDetectionAgent(ctx).execute(
+            series=clean, residual=residual, methods=["iqr", "zscore", "isof"]
+        )
+        interm_res = IntermittencyAgent(ctx).execute(series=clean)
+
+        ts_labels = [str(d)[:10] for d in clean.index]
+        chart_data: Dict[str, Any] = {
+            "labels": ts_labels,
+            "original": [round(float(v), 4) if not np.isnan(v) else None for v in clean.values],
+        }
+        if decomp_res.ok:
+            for comp in ("trend", "seasonal", "cycle", "residual"):
+                arr = decomp_res.data.get(comp)
+                if arr is not None:
+                    chart_data[comp] = [
+                        round(float(v), 4) if not np.isnan(v) else None for v in arr.values
+                    ]
+
+        outlier_timestamps = []
+        if out_res.ok and len(out_res.data["outlier_table"]) > 0:
+            outlier_timestamps = [
+                str(r["timestamp"])[:10] for _, r in out_res.data["outlier_table"].iterrows()
+            ]
+
+        Ft = decomp_res.metadata.get("trend_strength_Ft", 0) if decomp_res.ok else 0
+        Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0) if decomp_res.ok else 0
+        d  = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
+        interm_cls = interm_res.metadata.get("summary", {}).get("classification", "Smooth") if interm_res.ok else "Smooth"
+        model_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
+
+        n_agg = 1
+        if remaining_hier:
+            try:
+                n_agg = int(len(filtered.groupby(remaining_hier)))
+            except Exception:
+                n_agg = 1
+
+        summary = {
+            "node_label": node_label,
+            "node_path": body.node_path,
+            "is_leaf": is_leaf,
+            "path_depth": path_depth,
+            "n_rows_filtered": int(len(filtered)),
+            "n_series_aggregated": n_agg,
+            "agg_method": agg_fn if remaining_hier else "none (leaf)",
+            "series_stats": _safe(_series_stats(clean)),
+            "decomp": _safe({
+                "trend_strength_Ft": decomp_res.metadata.get("trend_strength_Ft"),
+                "seasonal_strength_Fs": decomp_res.metadata.get("seasonal_strength_Fs"),
+                "period_used": decomp_res.metadata.get("period_used"),
+                "differencing_order": decomp_res.metadata.get("differencing_order"),
+                "stationarity": decomp_res.metadata.get("stationarity"),
+                "trend_stats": decomp_res.metadata.get("trend_stats"),
+                "interpretation": decomp_res.metadata.get("interpretation"),
+                "acf_significant_lags": decomp_res.metadata.get("acf_significant_lags"),
+            }) if decomp_res.ok else {},
+            "outliers": _safe(out_res.metadata.get("summary", {})) if out_res.ok else {},
+            "intermittency": _safe(interm_res.metadata.get("summary", {})) if interm_res.ok else {},
+            "missing_values": _safe(mv_res.metadata.get("completeness", {})) if mv_res.ok else {},
+            "model_recommendation": model_rec,
+            "intermittency_class": interm_cls,
+        }
+
+        return {
+            "chart_data": chart_data,
+            "outlier_timestamps": outlier_timestamps,
+            "summary": summary,
+            "warnings": (
+                (decomp_res.warnings if decomp_res.ok else []) +
+                (out_res.warnings if out_res.ok else []) +
+                (interm_res.warnings if interm_res.ok else [])
+            ),
+        }
+
     # ── Analyze ───────────────────────────────────────────────────────────────
 
     class AnalyzeReq(BaseModel):
