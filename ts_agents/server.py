@@ -1162,4 +1162,5 @@ if __name__ == "__main__":
         log.info("Starting TemporalMind server on http://localhost:8000")
         uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
     except ImportError:
+        
         log.error("uvicorn not installed. Run: pip install uvicorn")
