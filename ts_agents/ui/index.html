@@ -92,6 +92,27 @@ tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(59,130,246,.04);color:var(--tx)}
 .td-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;letter-spacing:.5px}
 .tag-ts{background:rgba(6,182,212,.15);color:var(--a6)}
+.tag-dep{background:rgba(59,130,246,.18);color:#60a5fa;border:1px solid rgba(59,130,246,.3)}
+.tag-indep{background:rgba(16,185,129,.15);color:var(--a3)}
+.tag-event{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+.tag-hier2{background:rgba(139,92,246,.15);color:var(--a4)}
+.tag-ignore{background:rgba(31,45,66,.8);color:var(--tx3)}
+/* correlation heatmap cell */
+.corr-cell{width:52px;height:40px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;border-radius:4px;cursor:default;transition:all .15s}
+.corr-cell:hover{transform:scale(1.1);z-index:2;position:relative}
+/* ccf chart bar */
+.ccf-bar-pos{background:var(--a1);height:100%;border-radius:2px 2px 0 0}
+.ccf-bar-neg{background:var(--a5);height:100%;border-radius:2px 2px 0 0}
+/* var role card */
+.var-role-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;position:relative;transition:all .2s}
+.var-role-card:hover{border-color:var(--border2)}
+.var-role-card.role-dep{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.05)}
+.var-role-card.role-event{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04)}
+.var-role-card.role-indep{border-color:rgba(16,185,129,.3)}
+/* feature rec row */
+.feat-rec-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;transition:all .15s}
+.feat-rec-row.included{border-color:rgba(16,185,129,.3)}
+.feat-rec-row.excluded{opacity:.6}
 .tag-value{background:rgba(16,185,129,.15);color:var(--a3)}
 .tag-hier{background:rgba(139,92,246,.15);color:var(--a4)}
 .tag-other{background:rgba(31,45,66,.8);color:var(--tx3)}
@@ -321,7 +342,8 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 <div class="tabs-wrapper">
   <button class="tab-btn active" onclick="switchTab(0)" id="tab-0"><span class="tab-num">1</span>Upload Data</button>
   <button class="tab-btn" onclick="switchTab(1)" id="tab-1"><span class="tab-num">2</span>Time Series Analyzer</button>
-  <button class="tab-btn" onclick="switchTab(2)" id="tab-2"><span class="tab-num">3</span>Prepare Data</button>
+  <button class="tab-btn" onclick="switchTab(2)" id="tab-2"><span class="tab-num">3</span>Cross-Correlation</button>
+  <button class="tab-btn" onclick="switchTab(3)" id="tab-3"><span class="tab-num">4</span>Prepare Data</button>
 </div>
 
 <main>
@@ -578,8 +600,99 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 </div>
 <!-- END TAB 2 -->
 
-<!-- ═══════════════ TAB 3 — PREPARE DATA ═══════════════ -->
+
+<!-- ═══════════════ TAB 3 — CROSS-CORRELATION ═══════════════ -->
 <div class="tab-panel" id="panel-2">
+  <div class="section-h">Cross-Variable <em>Analysis</em></div>
+  <p class="section-sub">Understand relationships between your dependent, independent, and event variables. Detect lead/lag effects, event lifts, and Granger-causal links.</p>
+
+  <div class="alert alert-info" id="cc-no-data">⬆ Upload and confirm a multi-variable dataset in Tab 1 first.</div>
+
+  <div id="cc-ready" style="display:none">
+
+    <!-- Variable role summary bar -->
+    <div class="card" style="margin-bottom:18px" id="cc-role-summary">
+      <div class="card-title">🗂 Variable Roles</div>
+      <div id="cc-role-cards" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card" style="margin-bottom:18px">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+        <div class="form-group" style="flex:0 0 200px;margin:0">
+          <label class="form-label">Dependent Variable</label>
+          <select class="form-control" id="cc-dep-select" style="padding:7px 10px"></select>
+        </div>
+        <div class="form-group" style="flex:0 0 120px;margin:0">
+          <label class="form-label">Max CCF Lags</label>
+          <input type="number" class="form-control" id="cc-max-lags" value="20" min="5" max="60">
+        </div>
+        <div class="form-group" style="flex:0 0 140px;margin:0">
+          <label class="form-label">Event Window (post)</label>
+          <input type="number" class="form-control" id="cc-event-window" value="5" min="1" max="30">
+        </div>
+        <button class="btn btn-primary" onclick="runCrossCorrelation()">▶ Run Analysis</button>
+      </div>
+    </div>
+
+    <div id="cc-loader" style="display:none" class="loader-wrap">
+      <div class="spinner"></div><span class="loader-text">Computing cross-correlations…</span>
+    </div>
+
+    <div id="cc-results" style="display:none">
+
+      <!-- Correlation heatmap -->
+      <div class="card" style="margin-bottom:18px">
+        <div class="card-title">🌡 Pearson Correlation Matrix</div>
+        <div id="corr-heatmap-wrap" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- CCF charts for each indep variable -->
+      <div id="ccf-charts-section">
+        <div class="card-title" style="margin-bottom:12px;font-size:13px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase">
+          📉 Cross-Correlation Functions (vs Dependent)
+        </div>
+        <div id="ccf-charts-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:18px"></div>
+      </div>
+
+      <!-- Event impact section -->
+      <div id="event-impact-section" style="display:none;margin-bottom:18px">
+        <div class="card">
+          <div class="card-title">⚡ Event Impact Analysis</div>
+          <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">
+            How event periods affect the dependent variable — average lift, Cohen's d effect size, and post-event window response.
+          </p>
+          <div id="event-impact-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px"></div>
+        </div>
+      </div>
+
+      <!-- Granger proxy table -->
+      <div id="granger-section" style="display:none;margin-bottom:18px">
+        <div class="card">
+          <div class="card-title">🔗 Granger Causality Proxy</div>
+          <p style="font-size:13px;color:var(--tx2);margin-bottom:14px">
+            Incremental R² gained by adding each independent variable (lagged) to an AR(1) baseline model.
+          </p>
+          <div class="tbl-wrap" id="granger-table"></div>
+        </div>
+      </div>
+
+      <!-- Feature recommendations -->
+      <div class="card">
+        <div class="card-title">✅ Feature Recommendations for Forecasting</div>
+        <p style="font-size:13px;color:var(--tx2);margin-bottom:14px">
+          Variables ranked by their statistical evidence of relationship with the dependent variable.
+        </p>
+        <div id="feat-recs-list"></div>
+      </div>
+
+    </div><!-- /#cc-results -->
+  </div><!-- /#cc-ready -->
+</div>
+<!-- END TAB 3 -->
+
+<!-- ═══════════════ TAB 4 — PREPARE DATA ═══════════════ -->
+<div class="tab-panel" id="panel-3">
   <div class="section-h">Prepare <em>Data</em></div>
   <p class="section-sub">Step-by-step pipeline to produce a forecast-ready feature matrix.</p>
 
@@ -771,7 +884,8 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
     <div class="step-panel" id="prep-step-5">
       <div class="card" style="margin-bottom:18px">
         <div class="card-title">🚀 Prepare Data for Forecasting</div>
-        <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">Generates lag features, rolling statistics, calendar encodings, train/val/test labels, and model type recommendations.</p>
+        <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">Generates lag features, rolling statistics, calendar encodings, train/val/test labels, and model type recommendations. Independent and event variables are automatically attached as exogenous features.</p>
+        <div id="prep-dep-role-note" style="margin-bottom:12px;font-size:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
         <div id="prep-config-summary" style="margin-bottom:16px"></div>
         <button class="btn btn-primary btn-lg" onclick="runPrepare()">⚡ Generate Dataset</button>
         <div id="prep-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Running preparation pipeline…</span></div>
@@ -808,6 +922,7 @@ const API = 'http://localhost:8000';
 const S = {
   token: null, filename: null, uploadMeta: null,
   valueCols: [], hierCols: [], isHierarchy: false,
+  varRoles: {}, depCols: [], indepCols: [], eventCols: [],
   targetFreq: null, downloadToken: null, downloadExt: 'csv',
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
@@ -892,12 +1007,13 @@ async function checkApiStatus() {
 // TABS
 // ════════════════════════════════════════════════════════════
 function switchTab(idx) {
-  [0,1,2].forEach(i=>{
-    document.getElementById(`tab-${i}`).classList.toggle('active',i===idx);
-    document.getElementById(`panel-${i}`).classList.toggle('active',i===idx);
+  [0,1,2,3].forEach(i=>{
+    const tb=document.getElementById(`tab-${i}`); if(tb) tb.classList.toggle('active',i===idx);
+    const pn=document.getElementById(`panel-${i}`); if(pn) pn.classList.toggle('active',i===idx);
   });
   if(idx===1) initAnalyzerTab();
-  if(idx===2) initPrepTab();
+  if(idx===2) initCCTab();
+  if(idx===3) initPrepTab();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -941,7 +1057,7 @@ function renderUploadResult(meta) {
 }
 
 function buildColMapper(meta) {
-  const opts=`<option value="timestamp">Timestamp</option><option value="value">Value</option><option value="hierarchy">Hierarchy</option><option value="ignore">Ignore</option>`;
+  const opts=`<option value="timestamp">⏱ Timestamp</option><option value="dependent">🎯 Dependent (target)</option><option value="independent">📈 Independent (exog.)</option><option value="event">⚡ Event (binary 0/1)</option><option value="hierarchy">🌲 Hierarchy</option><option value="ignore">— Ignore</option>`;
   const rows=meta.columns.map(col=>{
     let role='ignore';
     if(meta.ts_candidates.includes(col)) role='timestamp';
@@ -958,11 +1074,11 @@ function buildColMapper(meta) {
   meta.columns.forEach(col=>{
     const sel=document.getElementById(`col-role-${encodeColId(col)}`);
     if(!sel) return;
-    let role='ignore';
-    if(meta.ts_candidates.includes(col)) role='timestamp';
-    else if(meta.value_candidates.includes(col)) role='value';
-    else if(meta.hierarchy_candidates.includes(col)) role='hierarchy';
-    sel.value=role;
+    let role=(meta.suggested_roles||{})[col]||'ignore';
+    if(role==='value') role='dependent'; // legacy
+    // make sure the option exists
+    const opts=[...sel.options].map(o=>o.value);
+    if(opts.includes(role)) sel.value=role;
   });
 }
 
@@ -970,19 +1086,26 @@ function encodeColId(col) { return encodeURIComponent(col).replace(/%/g,'_P_'); 
 
 async function confirmSchema() {
   const cols=S.uploadMeta.columns;
-  let tsCol=null,valCols=[],hierCols=[];
+  let tsCol=null,valCols=[],hierCols=[],depCols=[],indepCols=[],eventCols=[];
+  const varRoles={};
   cols.forEach(col=>{
     const sel=document.getElementById(`col-role-${encodeColId(col)}`);
     if(!sel) return;
-    if(sel.value==='timestamp') tsCol=col;
-    else if(sel.value==='value') valCols.push(col);
-    else if(sel.value==='hierarchy') hierCols.push(col);
+    const r=sel.value;
+    varRoles[col]=r;
+    if(r==='timestamp') tsCol=col;
+    else if(r==='hierarchy') hierCols.push(col);
+    else if(r==='dependent'){valCols.push(col);depCols.push(col);}
+    else if(r==='independent'){valCols.push(col);indepCols.push(col);}
+    else if(r==='event'){valCols.push(col);eventCols.push(col);}
   });
   if(!tsCol){toast('Assign a Timestamp column','err');return;}
-  if(!valCols.length){toast('Assign at least one Value column','err');return;}
+  if(!depCols.length&&!valCols.length){toast('Assign at least one Dependent column','err');return;}
+  // store roles in state
+  S.varRoles=varRoles; S.depCols=depCols; S.indepCols=indepCols; S.eventCols=eventCols;
   toast('Ingesting…','info');
   try {
-    const r=await api('/api/confirm-schema',{token:S.token,timestamp_col:tsCol,value_cols:valCols,hierarchy_cols:hierCols});
+    const r=await api('/api/confirm-schema',{token:S.token,timestamp_col:tsCol,value_cols:valCols,hierarchy_cols:hierCols,variable_roles:varRoles});
     S.valueCols=valCols; S.hierCols=hierCols; S.isHierarchy=hierCols.length>0;
     renderSchemaResult(r,tsCol,valCols,hierCols);
     toast('Dataset ingested ✓','ok');
@@ -991,15 +1114,24 @@ async function confirmSchema() {
 
 function renderSchemaResult(r,tsCol,valCols,hierCols){
   hide('schema-confirm-card');
-  const html=`<div class="grid-2" style="gap:10px">
+  const dep=(r.dependent_cols||S.depCols||[]);
+  const indep=(r.independent_cols||S.indepCols||[]);
+  const evts=(r.event_cols||S.eventCols||[]);
+  // update state from server response
+  S.depCols=dep; S.indepCols=indep; S.eventCols=evts;
+  S.valueCols=dep.concat(indep).concat(evts);
+  const html=`<div class="grid-4" style="gap:8px">
     ${statCard(r.schema.n_rows,'Rows')}${statCard(r.schema.detected_freq,'Freq','','var(--a6)')}
-    ${statCard(valCols.length,'Value Series')}${statCard(hierCols.length,'Hier Levels','',hierCols.length?'var(--a4)':'var(--tx3)')}
+    ${statCard(hierCols.length,'Hier Levels','',hierCols.length?'var(--a4)':'var(--tx3)')}
+    ${statCard(dep.length+indep.length+evts.length,'Value Cols')}
   </div>
-  <div style="margin-top:12px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--tx2);line-height:2">
-    <div>⏱ ${tsCol}</div>
-    <div>📈 <span style="color:var(--a3)">${valCols.join(', ')}</span></div>
-    ${hierCols.length?`<div>🌲 <span style="color:var(--a4)">${hierCols.join(' → ')}</span></div>`:''}
-    <div>📅 ${r.schema.date_range[0].substring(0,10)} → ${r.schema.date_range[1].substring(0,10)}</div>
+  <div style="margin-top:12px;display:flex;flex-direction:column;gap:5px">
+    <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--tx2)">⏱ ${tsCol}</div>
+    ${dep.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="td-tag tag-dep">🎯 Dependent</span>${dep.map(c=>`<span style="font-size:11px;color:var(--tx);font-family:'IBM Plex Mono',monospace">${c}</span>`).join(', ')}</div>`:''}
+    ${indep.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="td-tag tag-indep">📈 Independent</span>${indep.map(c=>`<span style="font-size:11px;color:var(--tx);font-family:'IBM Plex Mono',monospace">${c}</span>`).join(', ')}</div>`:''}
+    ${evts.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="td-tag tag-event">⚡ Events</span>${evts.map(c=>`<span style="font-size:11px;color:var(--tx);font-family:'IBM Plex Mono',monospace">${c}</span>`).join(', ')}</div>`:''}
+    ${hierCols.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="td-tag tag-hier">🌲 Hierarchy</span><span style="font-size:11px;color:var(--a4);font-family:'IBM Plex Mono',monospace">${hierCols.join(' → ')}</span></div>`:''}
+    <div style="font-size:11px;color:var(--tx3);font-family:'IBM Plex Mono',monospace">📅 ${r.schema.date_range[0].substring(0,10)} → ${r.schema.date_range[1].substring(0,10)}</div>
   </div>
   ${r.warnings.length?`<div class="alert alert-warn" style="margin-top:10px">${r.warnings.join('; ')}</div>`:''}`;
   setHtml('schema-result-body',html);
@@ -1507,6 +1639,14 @@ function modelFromDecomp(dc,ic) {
 // ════════════════════════════════════════════════════════════
 function initPrepTab(){
   if(!S.token){show('prep-no-data');hide('prep-content');return;}
+  // if roles set, propagate into the dep/indep summary
+  if(S.depCols&&S.depCols.length){
+    const prepSummary=document.getElementById('prep-dep-role-note');
+    if(prepSummary) prepSummary.innerHTML=
+      `<span class="td-tag tag-dep">🎯 Dep:</span> ${S.depCols.join(', ')}` +
+      (S.indepCols.length?` &nbsp;·&nbsp; <span class="td-tag tag-indep">📈 Indep:</span> ${S.indepCols.join(', ')}`:'') +
+      (S.eventCols.length?` &nbsp;·&nbsp; <span class="td-tag tag-event">⚡ Events:</span> ${S.eventCols.join(', ')}` :'');
+  }
   hide('prep-no-data'); show('prep-content');
   if(!S.isHierarchy){show('hier-na');hide('hier-app');}
   else{hide('hier-na');show('hier-app');
@@ -1652,7 +1792,7 @@ async function runPrepare(){
     const r=await api('/api/prepare',{token:S.token,transform:document.getElementById('prep-transform').value,scale_method:document.getElementById('prep-scale').value,rolling_windows:windows,add_calendar:document.getElementById('prep-calendar').checked,train_ratio:tr,val_ratio:vr,horizon:parseInt(document.getElementById('prep-horizon').value)||1,output_format:fmt});
     S.downloadToken=r.download_token; S.downloadExt=r.ext;
     setHtml('prep-stats-row',[statCard(r.n_rows.toLocaleString(),'Rows'),statCard(r.n_features,'Features'),statCard(r.series_summaries.length,'Series'),statCard(r.ext.toUpperCase(),'Format','','var(--a6)')].join(''));
-    const recRows=r.series_summaries.map(s=>({'Series':s.series,'Model':s.model_type,'Class':s.intermittency,'Ft':fmtNum(s.Ft,3),'Fs':fmtNum(s.Fs,3),'Rows':s.n_rows}));
+    const recRows=r.series_summaries.map(s=>({'Series':s.series,'Role':'🎯 Dependent','Model':s.model_type,'Class':s.intermittency,'Exog':s.has_exogenous?(s.n_indep+' indep, '+s.n_events+' events'):'none','Ft':fmtNum(s.Ft,3),'Fs':fmtNum(s.Fs,3),'Rows':s.n_rows}));
     setHtml('model-recs-table',buildTable(recRows));
     setHtml('prep-col-list',`<strong style="color:var(--tx)">Columns (${r.columns.length}):</strong> `+r.columns.slice(0,20).map(c=>{const isMod=c==='model_type_recommendation',isSp=c==='split',isTs=c==='timestamp'||c==='date';const cl=isMod?'tag-model':isSp?'tag-train':isTs?'tag-ts':'';return cl?`<span class="td-tag ${cl}" style="margin:2px">${c}</span>`:`<span style="margin:0 3px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)">${c}</span>`;}).join('')+(r.columns.length>20?`<span style="color:var(--tx3)"> +${r.columns.length-20} more</span>`:''));
     setHtml('prep-preview-tbl',buildTable(r.preview||[],r.columns.slice(0,16)));
@@ -1666,6 +1806,220 @@ function downloadData(){
   if(!S.downloadToken){toast('No prepared data','err');return;}
   window.location.href=`${API}/api/download/${S.downloadToken}?ext=${S.downloadExt}`;
   toast('Download started ✓','ok');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// TAB 3 — CROSS-CORRELATION
+// ════════════════════════════════════════════════════════════
+function initCCTab() {
+  if(!S.token){show('cc-no-data');hide('cc-ready');return;}
+  hide('cc-no-data'); show('cc-ready');
+  // populate dependent selector
+  const dep=S.depCols||[];
+  const sel=document.getElementById('cc-dep-select');
+  if(sel){
+    const allV=(dep.concat(S.indepCols||[]).concat(S.eventCols||[]));
+    sel.innerHTML=dep.map(c=>`<option value="${c}">${c} (dep)</option>`).join('')+
+      (S.indepCols||[]).map(c=>`<option value="${c}">${c} (indep)</option>`).join('');
+    if(!sel.options.length && S.valueCols) sel.innerHTML=S.valueCols.map(c=>`<option>${c}</option>`).join('');
+  }
+  // show role summary cards
+  renderCCRoleSummary();
+}
+
+function renderCCRoleSummary() {
+  const allRoles=S.varRoles||{};
+  const cards=[];
+  const depCols=S.depCols||[]; const indepCols=S.indepCols||[]; const eventCols=S.eventCols||[];
+  depCols.forEach(c=>cards.push({col:c,role:'dependent',tag:'tag-dep',icon:'🎯'}));
+  indepCols.forEach(c=>cards.push({col:c,role:'independent',tag:'tag-indep',icon:'📈'}));
+  eventCols.forEach(c=>cards.push({col:c,role:'event',tag:'tag-event',icon:'⚡'}));
+  const html=cards.map(({col,role,tag,icon})=>`
+    <div class="var-role-card role-${role==='dependent'?'dep':role==='event'?'event':'indep'}">
+      <span class="td-tag ${tag}" style="font-size:11px">${icon} ${role}</span>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--tx);margin-top:6px">${col}</div>
+    </div>`).join('');
+  setHtml('cc-role-cards',html||'<span style="color:var(--tx3);font-size:13px">Confirm schema in Tab 1 to set variable roles.</span>');
+}
+
+async function runCrossCorrelation() {
+  if(!S.token) return;
+  show('cc-loader'); hide('cc-results');
+  const depCol=document.getElementById('cc-dep-select')?.value;
+  const maxLags=parseInt(document.getElementById('cc-max-lags')?.value)||20;
+  const evtWin=parseInt(document.getElementById('cc-event-window')?.value)||5;
+  try {
+    const r=await api('/api/cross-correlation',{token:S.token,dependent_col:depCol,max_lags:maxLags,event_window:evtWin});
+    renderCCResults(r);
+    show('cc-results');
+    toast('Cross-correlation complete ✓','ok');
+  } catch(e){toast(`CC failed: ${e.message}`,'err');}
+  finally{hide('cc-loader');}
+}
+
+function renderCCResults(r) {
+  // 1. Correlation heatmap
+  renderCorrHeatmap(r.corr_matrix, r.corr_cols);
+
+  // 2. CCF charts
+  const ccfData=r.ccf_data||{};
+  const ccfCols=Object.keys(ccfData);
+  if(ccfCols.length===0){
+    setHtml('ccf-charts-section','<div class="alert alert-info">No independent variables to show CCF for.</div>');
+  } else {
+    let ccfHtml='<div class="card-title" style="margin-bottom:12px;font-size:13px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase">📉 Cross-Correlation Functions (vs '+r.dependent_col+')</div>';
+    ccfHtml+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:18px">';
+    ccfCols.forEach(col=>{
+      const cd=ccfData[col];
+      ccfHtml+=renderCCFCard(col,cd,r);
+    });
+    ccfHtml+='</div>';
+    setHtml('ccf-charts-section',ccfHtml);
+  }
+
+  // 3. Event impact
+  const impacts=r.event_impacts||{};
+  if(Object.keys(impacts).length){
+    show('event-impact-section');
+    let evHtml='';
+    Object.entries(impacts).forEach(([col,imp])=>{
+      const lift=imp.lift_pct||0; const d=imp.cohens_d||0; const eff=imp.effect_size||'small';
+      const liftColor=lift>0?'var(--a3)':lift<0?'var(--a5)':'var(--tx2)';
+      const effColor=eff==='large'?'var(--a3)':eff==='medium'?'var(--a2)':'var(--tx3)';
+      evHtml+=`<div class="card" style="border-color:rgba(245,158,11,.3)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span class="td-tag tag-event">⚡ event</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--tx)">${col}</span>
+        </div>
+        <div class="grid-2" style="gap:8px">
+          ${statCard(fmtNum(lift,1)+'%','Lift vs No-Event','',liftColor)}
+          ${statCard(fmtNum(d,3),'Cohen d','','var(--tx)')}
+          ${statCard(imp.n_event_periods||0,'Event Periods','')}
+          ${statCard(eff,'Effect Size','',effColor)}
+        </div>
+        <div style="margin-top:12px">
+          ${strengthBar('Effect magnitude',Math.min(1,Math.abs(d)/1.5),'fill-amber',eff)}
+        </div>
+        <div style="font-size:12px;color:var(--tx2);margin-top:8px">
+          Mean on event: <strong style="color:var(--tx)">${fmtNum(imp.mean_on_event,2)}</strong> &nbsp;vs&nbsp;
+          off event: <strong style="color:var(--tx)">${fmtNum(imp.mean_off_event,2)}</strong>
+          &nbsp;·&nbsp; Post-event avg: <strong style="color:var(--a6)">${fmtNum(imp.post_event_avg,2)}</strong>
+        </div>
+      </div>`;
+    });
+    setHtml('event-impact-grid',evHtml);
+  } else { hide('event-impact-section'); }
+
+  // 4. Granger table
+  const gr=r.granger_results||{};
+  if(Object.keys(gr).length){
+    show('granger-section');
+    const rows=Object.entries(gr).map(([col,g])=>({
+      Variable:col, 'Best Lag':g.best_lag, 'R² Gain':fmtNum(g.r2_gain,4),
+      'AR(1) R²':fmtNum(g.r2_base,4), Useful:g.useful?'✓ Yes':'✗ No',
+    }));
+    setHtml('granger-table',buildTable(rows));
+  } else { hide('granger-section'); }
+
+  // 5. Feature recommendations
+  const recs=r.feature_recommendations||[];
+  if(!recs.length){setHtml('feat-recs-list','<div style="color:var(--tx3);font-size:13px">No recommendations available.</div>');return;}
+  const recsHtml=recs.map(rec=>{
+    const inc=rec.include_in_model;
+    const tagCls=rec.role==='event'?'tag-event':'tag-indep';
+    const icon=rec.role==='event'?'⚡':'📈';
+    const scoreStr=rec.role==='event'?`lift=${fmtNum(rec.lift_pct,1)}% d=${fmtNum(rec.cohens_d,3)}`:`CCF=${fmtNum(rec.max_ccf,3)} lag=${rec.recommended_lag}`;
+    return `<div class="feat-rec-row ${inc?'included':'excluded'}">
+      <span class="td-tag ${tagCls}">${icon} ${rec.role}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--tx);flex:1">${rec.variable}</span>
+      <span style="font-size:11px;color:var(--tx2);flex:1">${rec.reason.substring(0,55)}</span>
+      <span style="font-size:11px;color:var(--tx3);font-family:'IBM Plex Mono',monospace;min-width:120px;text-align:right">${scoreStr}</span>
+      <span class="td-tag ${inc?'tag-value':'tag-other'}" style="min-width:80px;text-align:center">${inc?'✓ Include':'✗ Skip'}</span>
+    </div>`;
+  }).join('');
+  setHtml('feat-recs-list',recsHtml);
+}
+
+function renderCorrHeatmap(matrix, cols) {
+  if(!matrix||!cols||!cols.length){
+    setHtml('corr-heatmap-wrap','<div style="color:var(--tx3);font-size:13px;padding:8px">Insufficient data for correlation matrix.</div>');
+    return;
+  }
+  // Build HTML table heatmap
+  let h=`<table style="border-collapse:separate;border-spacing:3px">`;
+  // header row
+  h+=`<tr><td style="width:120px"></td>`;
+  cols.forEach(c=>h+=`<th style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--tx2);padding:2px 4px;text-align:center;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis" title="${c}">${c.substring(0,8)}</th>`);
+  h+='</tr>';
+  // data rows
+  cols.forEach(row=>{
+    h+=`<tr><td style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--tx2);padding:2px 6px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${row}">${row.substring(0,14)}</td>`;
+    cols.forEach(col=>{
+      const v=(matrix[row]||{})[col];
+      const numV=v==null?0:v;
+      const abs=Math.min(1,Math.abs(numV));
+      // colour: blue for positive, red for negative
+      let bg;
+      if(v==null) bg='rgba(31,45,66,0.4)';
+      else if(numV>0) bg=`rgba(59,130,246,${0.12+abs*0.7})`;
+      else            bg=`rgba(239,68,68,${0.12+abs*0.7})`;
+      const textColor=abs>0.5?'#fff':numV>0?'var(--a1)':'var(--a5)';
+      h+=`<td title="${row} × ${col}: ${v!=null?v.toFixed(3):'—'}"><div class="corr-cell" style="background:${bg};color:${textColor}">${v!=null?v.toFixed(2):'—'}</div></td>`;
+    });
+    h+='</tr>';
+  });
+  h+='</table>';
+  // colour legend
+  h+=`<div style="margin-top:12px;display:flex;align-items:center;gap:16px;font-size:11px;color:var(--tx3)">
+    <div style="display:flex;align-items:center;gap:6px">
+      <div style="width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(239,68,68,.7),rgba(31,45,66,.4),rgba(59,130,246,.9))"></div>
+      <span>−1 → 0 → +1</span>
+    </div>
+    <span>Red = negative correlation · Blue = positive correlation · Intensity = magnitude</span>
+  </div>`;
+  setHtml('corr-heatmap-wrap',h);
+}
+
+function renderCCFCard(col, cd, r) {
+  // bar chart via HTML divs
+  const lags=cd.lags||[]; const vals=cd.ccf||[];
+  const maxAbs=Math.max(...vals.map(Math.abs),0.01);
+  const sig=cd.sig_threshold||0.2;
+  const barH=80; // px
+  const bars=lags.map((lag,i)=>{
+    const v=vals[i]||0;
+    const frac=Math.abs(v)/maxAbs;
+    const h=Math.round(frac*barH);
+    const isPos=v>=0;
+    const isBest=lag===cd.best_lag;
+    const isSig=Math.abs(v)>sig;
+    const bg=isBest?'var(--a2)':isSig?(isPos?'var(--a1)':'var(--a5)'):'rgba(59,130,246,0.2)';
+    return `<div style="display:inline-flex;flex-direction:column-reverse;align-items:center;width:${lags.length<=25?'12px':'8px'};margin:0 1px;height:${barH}px;justify-content:flex-start" title="lag=${lag} ccf=${v.toFixed(3)}">
+      <div style="width:100%;height:${h}px;background:${bg};border-radius:2px 2px 0 0"></div>
+    </div>`;
+  }).join('');
+
+  const dep=r.dependent_col;
+  const isEvent=(r.event_cols||[]).includes(col);
+  const tagCls=isEvent?'tag-event':'tag-indep'; const icon=isEvent?'⚡':'📈';
+  return `<div class="card" style="${cd.significant?'border-color:rgba(59,130,246,.35)':''}">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span class="td-tag ${tagCls}">${icon}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--tx)">${col}</span>
+      ${cd.significant?'<span class="chip chip-blue" style="margin-left:auto">Significant</span>':''}
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:0;padding-bottom:4px;border-bottom:1px solid var(--border);height:${barH}px">${bars}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:3px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--tx3)">
+      <span>lag −${Math.max(...lags.map(Math.abs))}</span><span>0</span><span>lag +${Math.max(...lags.map(Math.abs))}</span>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
+      <div style="font-size:11px;color:var(--tx2)">Best lag: <strong style="color:var(--a2)">${cd.best_lag>=0?'+':''}${cd.best_lag}</strong></div>
+      <div style="font-size:11px;color:var(--tx2)">Max |CCF|: <strong style="color:var(--tx)">${Math.abs(cd.max_ccf||0).toFixed(3)}</strong></div>
+      <div style="font-size:11px;color:var(--tx2)">Sig threshold: ±${fmtNum(cd.sig_threshold,3)}</div>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--tx2);line-height:1.5">${cd.interpretation||''}</div>
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════════════

@@ -47,6 +47,11 @@ from agents.outlier_detection_agent import OutlierDetectionAgent
 from agents.missing_values_agent import MissingValuesAgent
 from agents.intermittency_agent import IntermittencyAgent
 from agents.data_preparation_agent import DataPreparationAgent
+from agents.multi_variable_agent import (
+    MultiVariableAgent, suggest_roles, detect_event_columns,
+    ROLE_DEPENDENT, ROLE_INDEPENDENT, ROLE_EVENT, ROLE_HIERARCHY,
+    ROLE_TIMESTAMP, ROLE_IGNORE,
+)
 from core.context_store import ContextStore
 
 logging.basicConfig(level=logging.INFO)
@@ -123,6 +128,26 @@ def _safe(val):
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL RECOMMENDATION
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _upgrade_model_for_exog(base_rec: str, has_exog: bool) -> str:
+    """Upgrade model suggestion when exogenous variables are present."""
+    if not has_exog:
+        return base_rec
+    mapping = {
+        "ETS / ARIMA":          "ARIMAX / LightGBM (with exog)",
+        "ARIMA(p,d,q)":         "ARIMAX (with exog)",
+        "ARIMA(p,1,q)":         "ARIMAX(p,1,q) + exog",
+        "Holt-Winters / SARIMA":"SARIMAX (with exog)",
+        "ETS(A,N,A) / SARIMA":  "SARIMAX (with exog)",
+        "Holt / ARIMA(p,1,0)":  "ARIMAX + exog",
+        "Croston / SBA":        "Croston + event regressors",
+        "TSB / Zero-Inflated":  "TSB + event regressors",
+    }
+    for k, v in mapping.items():
+        if k in base_rec:
+            return v
+    return base_rec + " + exog"
+
 
 def _recommend_model(
     classification: str,
@@ -207,6 +232,25 @@ if _HAS_FASTAPI:
                              len(val_candidates) == 0 or
                              (is_hierarchy and len(hier_candidates) > 4))
 
+            # ── detect event candidates (binary 0/1 columns) ─────────────────
+            event_candidates = detect_event_columns(df_raw, val_candidates)
+            # suggested roles for ALL columns
+            suggested_roles = {}
+            for c in cols:
+                if c in ts_candidates:
+                    suggested_roles[c] = ROLE_TIMESTAMP
+                elif c in hier_candidates:
+                    suggested_roles[c] = ROLE_HIERARCHY
+                elif c in event_candidates:
+                    suggested_roles[c] = ROLE_EVENT
+                elif c in val_candidates:
+                    # first non-event numeric = dependent, rest = independent
+                    non_event_vals = [v for v in val_candidates if v not in event_candidates]
+                    idx = non_event_vals.index(c) if c in non_event_vals else -1
+                    suggested_roles[c] = ROLE_DEPENDENT if idx == 0 else ROLE_INDEPENDENT
+                else:
+                    suggested_roles[c] = ROLE_IGNORE
+
             return {
                 "token": token,
                 "filename": fname,
@@ -217,6 +261,8 @@ if _HAS_FASTAPI:
                 "ts_candidates": ts_candidates,
                 "value_candidates": val_candidates,
                 "hierarchy_candidates": hier_candidates,
+                "event_candidates": event_candidates,
+                "suggested_roles": suggested_roles,
                 "is_hierarchy": is_hierarchy,
                 "needs_confirm": needs_confirm,
                 "preview": _df_to_records(df_raw, 8),
@@ -233,6 +279,8 @@ if _HAS_FASTAPI:
         timestamp_col: str
         value_cols: List[str]
         hierarchy_cols: List[str] = []
+        # extended variable role mapping (col -> role string)
+        variable_roles: Dict[str, str] = {}
 
     @app.post("/api/confirm-schema")
     async def confirm_schema(body: SchemaConfirm):
@@ -240,6 +288,13 @@ if _HAS_FASTAPI:
         if not sess:
             raise HTTPException(404, "Session not found")
         df_raw = sess["raw_df"]
+
+        # Derive value_cols from roles if provided
+        if body.variable_roles:
+            all_val = [c for c, r in body.variable_roles.items()
+                       if r in (ROLE_DEPENDENT, ROLE_INDEPENDENT, ROLE_EVENT)]
+            if all_val:
+                body = body.model_copy(update={"value_cols": all_val})
 
         agent = IngestionAgent()
         result = agent.execute(
@@ -252,17 +307,39 @@ if _HAS_FASTAPI:
             raise HTTPException(400, result.errors[0] if result.errors else "Ingestion failed")
 
         df: pd.DataFrame = result.data
+        roles = body.variable_roles or {}
+
+        # Classify by role
+        dep_cols   = [c for c, r in roles.items() if r == ROLE_DEPENDENT]
+        indep_cols = [c for c, r in roles.items() if r == ROLE_INDEPENDENT]
+        event_cols = [c for c, r in roles.items() if r == ROLE_EVENT]
+
+        # Fallback: if no roles given, auto-suggest
+        if not roles:
+            roles = suggest_roles(df, ts_col=body.timestamp_col)
+            dep_cols   = [c for c, r in roles.items() if r == ROLE_DEPENDENT]
+            indep_cols = [c for c, r in roles.items() if r == ROLE_INDEPENDENT]
+            event_cols = [c for c, r in roles.items() if r == ROLE_EVENT]
+
         sess["df"] = df
         sess["schema"] = result.metadata
         sess["value_cols"] = body.value_cols
         sess["hierarchy_cols"] = body.hierarchy_cols
         sess["detected_freq"] = result.metadata["detected_freq"]
+        sess["variable_roles"] = roles
+        sess["dependent_cols"] = dep_cols or (body.value_cols[:1] if body.value_cols else [])
+        sess["independent_cols"] = indep_cols
+        sess["event_cols"] = event_cols
 
         return {
             "ok": True,
             "schema": _safe(result.metadata["schema"]),
             "warnings": result.warnings,
             "preview": _df_to_records(df.reset_index(), 10),
+            "variable_roles": roles,
+            "dependent_cols": dep_cols,
+            "independent_cols": indep_cols,
+            "event_cols": event_cols,
         }
 
     # ── Interval advice ───────────────────────────────────────────────────────
@@ -387,6 +464,143 @@ if _HAS_FASTAPI:
             "report": result.metadata.get("report", ""),
         }
 
+
+
+    # ── Variable roles endpoint ───────────────────────────────────────────────
+
+    class VariableRolesReq(BaseModel):
+        token: str
+        roles: Dict[str, str]   # col -> role
+
+    @app.post("/api/variable-roles")
+    async def set_variable_roles(body: VariableRolesReq):
+        """Update variable roles in the session and return stats per variable."""
+        sess = _sessions.get(body.token)
+        if not sess or "df" not in sess:
+            raise HTTPException(404)
+        df: pd.DataFrame = sess["df"]
+
+        roles = body.roles
+        dep_cols   = [c for c, r in roles.items() if r == ROLE_DEPENDENT   and c in df.columns]
+        indep_cols = [c for c, r in roles.items() if r == ROLE_INDEPENDENT and c in df.columns]
+        event_cols = [c for c, r in roles.items() if r == ROLE_EVENT       and c in df.columns]
+
+        sess["variable_roles"]  = roles
+        sess["dependent_cols"]  = dep_cols
+        sess["independent_cols"]= indep_cols
+        sess["event_cols"]      = event_cols
+        # Also keep value_cols as union of all numeric roles
+        sess["value_cols"] = dep_cols + indep_cols + event_cols
+
+        # Per-variable quick stats
+        stats = {}
+        for col in (dep_cols + indep_cols + event_cols):
+            if col in df.columns:
+                s = df[col].dropna()
+                stats[col] = {
+                    "role": roles[col],
+                    "n": int(len(s)),
+                    "n_missing": int(df[col].isna().sum()),
+                    "mean": round(float(s.mean()), 4) if len(s) else None,
+                    "std":  round(float(s.std()),  4) if len(s) > 1 else None,
+                    "min":  round(float(s.min()),  4) if len(s) else None,
+                    "max":  round(float(s.max()),  4) if len(s) else None,
+                    "pct_zero": round(float((s == 0).mean() * 100), 2) if len(s) else 0,
+                }
+
+        return {
+            "ok": True,
+            "dependent_cols": dep_cols,
+            "independent_cols": indep_cols,
+            "event_cols": event_cols,
+            "stats": _safe(stats),
+        }
+
+    # ── Cross-correlation analysis ────────────────────────────────────────────
+
+    class CrossCorrReq(BaseModel):
+        token: str
+        dependent_col: Optional[str] = None
+        max_lags: int = 20
+        event_window: int = 5
+
+    @app.post("/api/cross-correlation")
+    async def cross_correlation(body: CrossCorrReq):
+        """Run full multi-variable analysis: CCF, event impact, Granger proxy."""
+        sess = _sessions.get(body.token)
+        if not sess or "df" not in sess:
+            raise HTTPException(404)
+
+        df: pd.DataFrame = sess.get("accumulated_df", sess["df"])
+        roles = sess.get("variable_roles", {})
+
+        # Build roles dict from session
+        dep_cols   = sess.get("dependent_cols", [])
+        indep_cols = sess.get("independent_cols", [])
+        event_cols = sess.get("event_cols", [])
+
+        if not dep_cols:
+            # fallback: first value col
+            vc = sess.get("value_cols", [])
+            if vc:
+                dep_cols = [vc[0]]
+                indep_cols = vc[1:]
+            else:
+                raise HTTPException(400, "No dependent column found in session")
+
+        dep_col = body.dependent_col or dep_cols[0]
+
+        # Rebuild roles for agent
+        agent_roles = {}
+        for c in dep_cols:   agent_roles[c] = ROLE_DEPENDENT
+        for c in indep_cols: agent_roles[c] = ROLE_INDEPENDENT
+        for c in event_cols: agent_roles[c] = ROLE_EVENT
+
+        # Use accumulated df if available, only with relevant cols
+        all_cols = [c for c in (dep_cols + indep_cols + event_cols) if c in df.columns]
+        if not all_cols:
+            raise HTTPException(400, "No matching columns in current dataframe")
+
+        agent = MultiVariableAgent()
+        result = agent.execute(
+            df=df[all_cols].copy(),
+            roles=agent_roles,
+            dependent_col=dep_col,
+            max_ccf_lags=body.max_lags,
+            event_window=body.event_window,
+        )
+        if not result.ok:
+            raise HTTPException(500, result.errors[0] if result.errors else "Analysis failed")
+
+        # Build correlation heatmap data
+        corr = result.data["corr_matrix"]
+        var_stats = result.data["var_stats"]
+        ccf_data = {}
+        for col, res in result.data["ccf_results"].items():
+            ccf_data[col] = {
+                "lags": res["lags"],
+                "ccf": res["ccf"],
+                "best_lag": res["best_lag"],
+                "max_ccf": res["max_ccf"],
+                "sig_threshold": res["sig_threshold"],
+                "significant": res["significant"],
+                "interpretation": res["interpretation"],
+            }
+
+        return {
+            "dependent_col": dep_col,
+            "independent_cols": indep_cols,
+            "event_cols": event_cols,
+            "var_stats": _safe(var_stats),
+            "corr_matrix": _safe(corr),
+            "corr_cols": all_cols,
+            "ccf_data": _safe(ccf_data),
+            "event_impacts": _safe(result.data["event_impacts"]),
+            "granger_results": _safe(result.data["granger_results"]),
+            "feature_recommendations": _safe(result.data["feature_recommendations"]),
+            "report": result.metadata.get("report", ""),
+            "warnings": result.warnings,
+        }
 
     # ── Hierarchy tree structure ──────────────────────────────────────────────
 
@@ -751,6 +965,7 @@ if _HAS_FASTAPI:
         output_format: str = "csv"   # csv | excel
         hier_level: Optional[str] = None
 
+
     def _first_session_frame(sess: Dict[str, Any]) -> Optional[pd.DataFrame]:
         for key in ("treated_df", "imputed_df", "accumulated_df", "df"):
             if key in sess:
@@ -758,147 +973,158 @@ if _HAS_FASTAPI:
                 if isinstance(candidate, pd.DataFrame):
                     return candidate
         return None
-
     @app.post("/api/prepare")
     async def prepare(body: PrepareReq):
-        try:
-            sess = _sessions.get(body.token)
-            if sess is None or "df" not in sess:
-                raise HTTPException(
-                    404,
-                    "Session not found or schema not confirmed. Upload the file again and confirm the schema before preparing data.",
-                )
+        sess = _sessions.get(body.token)
+        if not sess or "df" not in sess:
+            raise HTTPException(404)
+        work_df = _first_session_frame(sess)
+        # work_df = (sess.get("treated_df") or
+        #            sess.get("imputed_df") or
+        #            sess.get("accumulated_df") or
+        #            sess["df"])
+        val_cols = sess.get("value_cols", work_df.select_dtypes("number").columns.tolist())
+        hier_cols = sess.get("hierarchy_cols", [])
 
-            work_df = _first_session_frame(sess)
-            if work_df is None:
-                raise HTTPException(500, "No prepared working dataframe found in session.")
+        dep_cols   = sess.get("dependent_cols", val_cols[:1])
+        indep_cols = sess.get("independent_cols", [])
+        event_cols = sess.get("event_cols", [])
 
-            val_cols = sess.get("value_cols")
-            if val_cols is None:
-                val_cols = work_df.select_dtypes("number").columns.tolist()
+        # Only prepare the dependent column(s); attach indep/event as extra features
+        target_cols = dep_cols if dep_cols else val_cols[:1]
+        all_prepared: List[pd.DataFrame] = []
 
-            all_prepared: List[pd.DataFrame] = []
-            prep_failures: Dict[str, Any] = {}
+        for col in target_cols:
+            if col not in work_df.columns:
+                continue
+            series = work_df[col].dropna()
 
-            for col in val_cols:
-                series = work_df[col].dropna()
+            # get ACF lags from earlier decomp if available
+            acf_lags = None
+            dr = sess.get("decomp_result")
+            if dr and dr.ok:
+                acf_lags = dr.metadata.get("acf_significant_lags")
 
-                acf_lags = None
-                dr = sess.get("decomp_result")
-                if dr is not None and getattr(dr, "ok", False):
-                    acf_lags = dr.metadata.get("acf_significant_lags")
+            # intermittency classification
+            interm_res = IntermittencyAgent().execute(series=series)
+            interm_cls = interm_res.metadata.get("summary", {}).get("classification", "Smooth") if interm_res.ok else "Smooth"
 
-                interm_res = IntermittencyAgent().execute(series=series)
-                interm_cls = (
-                    interm_res.metadata.get("summary", {}).get("classification", "Smooth")
-                    if interm_res.ok else "Smooth"
-                )
+            # decomp for model rec
+            decomp_res = DecompositionAgent().execute(series=series)
+            Ft = decomp_res.metadata.get("trend_strength_Ft", 0.0) if decomp_res.ok else 0.0
+            Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0.0) if decomp_res.ok else 0.0
+            d  = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
 
-                decomp_res = DecompositionAgent().execute(series=series)
-                Ft = decomp_res.metadata.get("trend_strength_Ft", 0.0) if decomp_res.ok else 0.0
-                Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0.0) if decomp_res.ok else 0.0
-                d = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
+            # Check if we have significant exogenous variables → upgrade model rec
+            has_exog = bool(indep_cols or event_cols)
+            base_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
+            model_rec = _upgrade_model_for_exog(base_rec, has_exog)
 
-                model_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
-
-                prep_res = DataPreparationAgent().execute(
-                    series=series,
-                    target_col=col,
-                    transform=body.transform,
-                    scale_method=body.scale_method,
-                    rolling_windows=body.rolling_windows,
-                    add_calendar=body.add_calendar,
-                    train_ratio=body.train_ratio,
-                    val_ratio=body.val_ratio,
-                    horizon=body.horizon,
-                    acf_lags=acf_lags,
-                )
-                if not prep_res.ok:
-                    prep_failures[col] = {
-                        "errors": prep_res.errors,
-                        "warnings": prep_res.warnings,
-                    }
-                    continue
-
-                feat_df = prep_res.data["feature_matrix"].copy()
-                feat_df["series_name"] = col
-                feat_df["model_type_recommendation"] = model_rec
-                feat_df["intermittency_class"] = interm_cls
-                feat_df["trend_strength_Ft"] = round(Ft, 4)
-                feat_df["seasonal_strength_Fs"] = round(Fs, 4)
-
-                n = len(feat_df)
-                n_train = prep_res.data["X_train"].shape[0]
-                n_val = prep_res.data["X_val"].shape[0]
-                split_labels = (
-                    ["train"] * n_train +
-                    ["validation"] * n_val +
-                    ["test"] * (n - n_train - n_val)
-                )
-                feat_df["split"] = split_labels[:n]
-
-                all_prepared.append(feat_df)
-
-            if not all_prepared:
-                raise HTTPException(
-                    500,
-                    _safe({
-                        "message": "Data preparation failed for all columns",
-                        "failures": prep_failures,
-                    }),
-                )
-
-            final_df = pd.concat(all_prepared, axis=0).reset_index()
-
-            token = str(uuid.uuid4())[:8]
-            if body.output_format == "excel":
-                buf = io.BytesIO()
-                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                    final_df.to_excel(writer, index=False, sheet_name="PreparedData")
-                _downloads[token] = buf.getvalue()
-                ext = "xlsx"
-                mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            else:
-                csv_bytes = final_df.to_csv(index=False).encode()
-                _downloads[token] = csv_bytes
-                ext = "csv"
-                mime = "text/csv"
-
-            series_summaries = []
-            for col in val_cols:
-                sub = final_df[final_df["series_name"] == col]
-                if len(sub) > 0:
-                    series_summaries.append({
-                        "series": col,
-                        "n_rows": len(sub),
-                        "n_features": len(sub.columns),
-                        "model_type": sub["model_type_recommendation"].iloc[0],
-                        "intermittency": sub["intermittency_class"].iloc[0],
-                        "Ft": float(sub["trend_strength_Ft"].iloc[0]),
-                        "Fs": float(sub["seasonal_strength_Fs"].iloc[0]),
-                    })
-
-            return {
-                "download_token": token,
-                "ext": ext,
-                "mime": mime,
-                "n_rows": len(final_df),
-                "n_features": len(final_df.columns),
-                "series_summaries": series_summaries,
-                "preview": _df_to_records(final_df, 15),
-                "columns": list(final_df.columns),
-            }
-        except HTTPException:
-            raise
-        except Exception as exc:
-            raise HTTPException(
-                500,
-                _safe({
-                    "message": "Unexpected error in prepare",
-                    "error": str(exc),
-                    "traceback": traceback.format_exc(),
-                }),
+            # data prep (target series)
+            prep_res = DataPreparationAgent().execute(
+                series=series,
+                target_col=col,
+                transform=body.transform,
+                scale_method=body.scale_method,
+                rolling_windows=body.rolling_windows,
+                add_calendar=body.add_calendar,
+                train_ratio=body.train_ratio,
+                val_ratio=body.val_ratio,
+                horizon=body.horizon,
+                acf_lags=acf_lags,
             )
+            if not prep_res.ok:
+                continue
+
+            feat_df = prep_res.data["feature_matrix"].copy()
+
+            # ── Attach independent variable features ──────────────────────────
+            for ic in indep_cols:
+                if ic not in work_df.columns:
+                    continue
+                indep_s = work_df[ic].reindex(feat_df.index)
+                feat_df[f"indep__{ic}"] = indep_s.values
+                # lagged version at lag-1
+                feat_df[f"indep_lag1__{ic}"] = indep_s.shift(1).values
+
+            # ── Attach event features ────────────────────────────────────────
+            for ec in event_cols:
+                if ec not in work_df.columns:
+                    continue
+                ev_s = work_df[ec].reindex(feat_df.index).fillna(0)
+                feat_df[f"event__{ec}"] = ev_s.values
+                # rolling event count over 7 periods
+                feat_df[f"event_roll7__{ec}"] = ev_s.rolling(7, min_periods=1).sum().values
+
+            feat_df["series_name"] = col
+            feat_df["variable_role"] = ROLE_DEPENDENT
+            feat_df["model_type_recommendation"] = model_rec
+            feat_df["intermittency_class"] = interm_cls
+            feat_df["trend_strength_Ft"] = round(Ft, 4)
+            feat_df["seasonal_strength_Fs"] = round(Fs, 4)
+            feat_df["has_exogenous"] = has_exog
+
+            # split label
+            n = len(feat_df)
+            n_train = prep_res.data["X_train"].shape[0]
+            n_val   = prep_res.data["X_val"].shape[0]
+            split_labels = (
+                ["train"] * n_train +
+                ["validation"] * n_val +
+                ["test"] * (n - n_train - n_val)
+            )
+            feat_df["split"] = split_labels[:n]
+            all_prepared.append(feat_df)
+
+        if not all_prepared:
+            raise HTTPException(500, "Data preparation failed for all columns")
+
+        final_df = pd.concat(all_prepared, axis=0)
+        final_df = final_df.reset_index()
+
+        # serialise
+        token = str(uuid.uuid4())[:8]
+        if body.output_format == "excel":
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                final_df.to_excel(writer, index=False, sheet_name="PreparedData")
+            _downloads[token] = buf.getvalue()
+            ext = "xlsx"
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            csv_bytes = final_df.to_csv(index=False).encode()
+            _downloads[token] = csv_bytes
+            ext = "csv"
+            mime = "text/csv"
+
+        # summary info
+        series_summaries = []
+        for col in target_cols:
+            sub = final_df[final_df["series_name"] == col] if "series_name" in final_df.columns else final_df
+            if len(sub):
+                series_summaries.append({
+                    "series": col,
+                    "n_rows": len(sub),
+                    "n_features": len(sub.columns),
+                    "model_type": sub["model_type_recommendation"].iloc[0] if "model_type_recommendation" in sub.columns else "—",
+                    "intermittency": sub["intermittency_class"].iloc[0] if "intermittency_class" in sub.columns else "—",
+                    "Ft": float(sub["trend_strength_Ft"].iloc[0]) if "trend_strength_Ft" in sub.columns else 0,
+                    "Fs": float(sub["seasonal_strength_Fs"].iloc[0]) if "seasonal_strength_Fs" in sub.columns else 0,
+                    "has_exogenous": bool(sub["has_exogenous"].iloc[0]) if "has_exogenous" in sub.columns else False,
+                    "n_indep": len(indep_cols),
+                    "n_events": len(event_cols),
+                })
+
+        return {
+            "download_token": token,
+            "ext": ext,
+            "mime": mime,
+            "n_rows": len(final_df),
+            "n_features": len(final_df.columns),
+            "series_summaries": series_summaries,
+            "preview": _df_to_records(final_df, 15),
+            "columns": list(final_df.columns),
+        }
 
     # ── Download ──────────────────────────────────────────────────────────────
 
@@ -919,18 +1145,10 @@ if _HAS_FASTAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root():
-        base_dir = Path(__file__).parent
-        candidate_paths = [
-            base_dir / "ui" / "index.html",
-            base_dir / "index.html",
-        ]
-        for html_path in candidate_paths:
-            if html_path.exists():
-                return HTMLResponse(html_path.read_text(encoding="utf-8"))
-        return HTMLResponse(
-            "<h1>TemporalMind UI not found. Place index.html in ./ui/ or project root.</h1>",
-            status_code=404,
-        )
+        html_path = Path(__file__).parent / "ui" / "index.html"
+        if html_path.exists():
+            return HTMLResponse(html_path.read_text())
+        return HTMLResponse("<h1>TemporalMind – UI not found. Place index.html in ./ui/</h1>")
 
     @app.get("/health")
     async def health():
@@ -942,6 +1160,6 @@ if __name__ == "__main__":
     try:
         import uvicorn
         log.info("Starting TemporalMind server on http://localhost:8000")
-        uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+        uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
     except ImportError:
         log.error("uvicorn not installed. Run: pip install uvicorn")
