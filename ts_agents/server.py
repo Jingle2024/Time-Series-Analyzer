@@ -61,6 +61,11 @@ log = logging.getLogger("server")
 _sessions: Dict[str, Dict[str, Any]] = {}
 _downloads: Dict[str, bytes] = {}   # token → file bytes
 
+LARGE_DATASET_ROW_THRESHOLD = 100_000
+LARGE_SERIES_THRESHOLD = 10_000
+LARGE_GROUP_THRESHOLD = 2_000
+DEFAULT_MAX_CHART_POINTS = 1_500
+
 # ── lazy FastAPI import ───────────────────────────────────────────────────────
 try:
     from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -123,6 +128,25 @@ def _safe(val):
     if val is None or val != val:   # NaN check
         return None
     return val
+
+
+def _downsample_series(series: pd.Series, max_points: int = DEFAULT_MAX_CHART_POINTS) -> pd.Series:
+    """Return an evenly spaced subset for large chart payloads."""
+    if len(series) <= max_points:
+        return series
+    idx = np.linspace(0, len(series) - 1, num=max_points, dtype=int)
+    return series.iloc[idx]
+
+
+def _series_to_chart_payload(series: pd.Series, max_points: int = DEFAULT_MAX_CHART_POINTS) -> Dict[str, Any]:
+    sampled = _downsample_series(series, max_points=max_points)
+    return {
+        "labels": [str(d)[:10] for d in sampled.index],
+        "values": [round(float(v), 4) if not np.isnan(v) else None for v in sampled.values],
+        "n_points_original": int(len(series)),
+        "n_points_returned": int(len(sampled)),
+        "downsampled": bool(len(sampled) < len(series)),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -212,11 +236,15 @@ if _HAS_FASTAPI:
             ts_candidates, val_candidates, hier_candidates = [], [], []
             for c in cols:
                 col_lower = c.lower()
-                # try datetime parse
+                # try datetime parse without emitting noisy per-value parse warnings
                 try:
-                    pd.to_datetime(df_raw[c].dropna().iloc[:10])
-                    ts_candidates.append(c)
-                    continue
+                    sample = df_raw[c].dropna().head(10)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        parsed = pd.to_datetime(sample, errors="coerce")
+                    if len(parsed) and float(parsed.notna().mean()) >= 0.8:
+                        ts_candidates.append(c)
+                        continue
                 except Exception:
                     pass
                 if any(h in col_lower for h in ["date","time","ts","period","month","week","year"]):
@@ -606,6 +634,9 @@ if _HAS_FASTAPI:
 
     class HierarchyTreeReq(BaseModel):
         token: str
+        safe_mode: bool = True
+        include_tree: bool = True
+        max_values_per_level: int = 500
 
     @app.post("/api/hierarchy-tree")
     async def hierarchy_tree(body: HierarchyTreeReq):
@@ -620,9 +651,12 @@ if _HAS_FASTAPI:
         if not hier_cols:
             raise HTTPException(400, "No hierarchy columns in this session")
 
+        use_safe_mode = body.safe_mode and len(df) >= LARGE_DATASET_ROW_THRESHOLD
         level_values: Dict[str, List] = {}
         for col in hier_cols:
             vals = sorted(df[col].dropna().unique().tolist())
+            if use_safe_mode:
+                vals = vals[:body.max_values_per_level]
             level_values[col] = [str(v) for v in vals]
 
         def build_tree(sub_df: pd.DataFrame, remaining: List[str]) -> Any:
@@ -636,14 +670,76 @@ if _HAS_FASTAPI:
                 result[str(val)] = build_tree(child_df, rest)
             return result
 
-        tree = build_tree(df, hier_cols)
-        total_leaves = len(df.groupby(hier_cols))
+        tree = None
+        if body.include_tree and not use_safe_mode:
+            tree = build_tree(df, hier_cols)
+
+        total_leaves = None
+        if not use_safe_mode:
+            total_leaves = len(df.groupby(hier_cols))
 
         return {
             "levels": hier_cols,
             "tree": tree,
             "level_values": level_values,
             "total_leaves": total_leaves,
+            "safe_mode_used": use_safe_mode,
+            "tree_deferred": bool(use_safe_mode and body.include_tree),
+            "message": (
+                "Large dataset safe mode enabled. Returning level values only; load deeper nodes on demand."
+                if use_safe_mode else ""
+            ),
+        }
+
+    class HierarchyChildrenReq(BaseModel):
+        token: str
+        path: Dict[str, str] = {}
+        next_level: Optional[str] = None
+        max_values: int = 500
+
+    @app.post("/api/hierarchy-children")
+    async def hierarchy_children(body: HierarchyChildrenReq):
+        """
+        Returns valid child values for the next hierarchy level given the current path.
+        Used by cascading dropdowns so large datasets do not need the full tree in memory.
+        """
+        sess = _sessions.get(body.token)
+        if not sess or "df" not in sess:
+            raise HTTPException(404, "No ingested data")
+
+        df: pd.DataFrame = sess["df"]
+        hier_cols = sess.get("hierarchy_cols", [])
+        if not hier_cols:
+            raise HTTPException(400, "No hierarchy columns in this session")
+
+        path = body.path or {}
+        if body.next_level:
+            if body.next_level not in hier_cols:
+                raise HTTPException(400, f"Unknown hierarchy level: {body.next_level}")
+            next_level = body.next_level
+        else:
+            next_idx = len(path)
+            if next_idx >= len(hier_cols):
+                return {"level": None, "values": [], "path": path}
+            next_level = hier_cols[next_idx]
+
+        filtered = df
+        for col in hier_cols:
+            if col in path and path[col] != "":
+                filtered = filtered[filtered[col].astype(str) == str(path[col])]
+
+        if next_level not in filtered.columns:
+            raise HTTPException(400, f"Level not found in dataframe: {next_level}")
+
+        values = sorted(filtered[next_level].dropna().astype(str).unique().tolist())
+        if body.max_values and body.max_values > 0:
+            values = values[:body.max_values]
+
+        return {
+            "level": next_level,
+            "values": values,
+            "path": path,
+            "count": len(values),
         }
 
     # ── Analyze a specific hierarchy node ─────────────────────────────────────
@@ -654,6 +750,8 @@ if _HAS_FASTAPI:
         value_col: Optional[str] = None
         period: Optional[int] = None
         agg_method: str = "sum"
+        safe_mode: bool = True
+        max_chart_points: int = DEFAULT_MAX_CHART_POINTS
 
     @app.post("/api/analyze-node")
     async def analyze_node(body: AnalyzeNodeReq):
@@ -698,48 +796,75 @@ if _HAS_FASTAPI:
         if len(series) < 4:
             raise HTTPException(400, f"Too few data points ({len(series)}) for: {node_label}")
 
-        ctx = ContextStore()
-        mv_res = MissingValuesAgent(ctx).execute(series=series)
-        clean = mv_res.data["imputed"] if mv_res.ok else series
-
-        decomp_res = DecompositionAgent(ctx).execute(series=clean, period=body.period)
-        residual = decomp_res.data.get("residual") if decomp_res.ok else None
-        out_res = OutlierDetectionAgent(ctx).execute(
-            series=clean, residual=residual, methods=["iqr", "zscore", "isof"]
-        )
-        interm_res = IntermittencyAgent(ctx).execute(series=clean)
-
-        ts_labels = [str(d)[:10] for d in clean.index]
-        chart_data: Dict[str, Any] = {
-            "labels": ts_labels,
-            "original": [round(float(v), 4) if not np.isnan(v) else None for v in clean.values],
-        }
-        if decomp_res.ok:
-            for comp in ("trend", "seasonal", "cycle", "residual"):
-                arr = decomp_res.data.get(comp)
-                if arr is not None:
-                    chart_data[comp] = [
-                        round(float(v), 4) if not np.isnan(v) else None for v in arr.values
-                    ]
-
-        outlier_timestamps = []
-        if out_res.ok and len(out_res.data["outlier_table"]) > 0:
-            outlier_timestamps = [
-                str(r["timestamp"])[:10] for _, r in out_res.data["outlier_table"].iterrows()
-            ]
-
-        Ft = decomp_res.metadata.get("trend_strength_Ft", 0) if decomp_res.ok else 0
-        Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0) if decomp_res.ok else 0
-        d  = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
-        interm_cls = interm_res.metadata.get("summary", {}).get("classification", "Smooth") if interm_res.ok else "Smooth"
-        model_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
-
         n_agg = 1
         if remaining_hier:
             try:
                 n_agg = int(len(filtered.groupby(remaining_hier)))
             except Exception:
                 n_agg = 1
+
+        use_safe_mode = body.safe_mode and (
+            len(filtered) >= LARGE_DATASET_ROW_THRESHOLD or
+            len(series) >= LARGE_SERIES_THRESHOLD or
+            n_agg >= LARGE_GROUP_THRESHOLD
+        )
+
+        ctx = ContextStore()
+        mv_res = MissingValuesAgent(ctx).execute(series=series)
+        clean = mv_res.data["imputed"] if mv_res.ok else series
+
+        decomp_res = None
+        out_res = None
+        interm_res = None
+        outlier_timestamps = []
+        Ft = 0
+        Fs = 0
+        d = 0
+        interm_cls = "Deferred"
+        model_rec = "Select a smaller node for full model recommendation"
+
+        if use_safe_mode:
+            payload = _series_to_chart_payload(clean, max_points=body.max_chart_points)
+            chart_data: Dict[str, Any] = {
+                "labels": payload["labels"],
+                "original": payload["values"],
+                "downsampled": payload["downsampled"],
+                "n_points_original": payload["n_points_original"],
+                "n_points_returned": payload["n_points_returned"],
+            }
+        else:
+            decomp_res = DecompositionAgent(ctx).execute(series=clean, period=body.period)
+            residual = decomp_res.data.get("residual") if decomp_res.ok else None
+            out_res = OutlierDetectionAgent(ctx).execute(
+                series=clean, residual=residual, methods=["iqr", "zscore", "isof"]
+            )
+            interm_res = IntermittencyAgent(ctx).execute(series=clean)
+
+            payload = _series_to_chart_payload(clean, max_points=body.max_chart_points)
+            chart_data = {
+                "labels": payload["labels"],
+                "original": payload["values"],
+                "downsampled": payload["downsampled"],
+                "n_points_original": payload["n_points_original"],
+                "n_points_returned": payload["n_points_returned"],
+            }
+            if decomp_res.ok:
+                for comp in ("trend", "seasonal", "cycle", "residual"):
+                    arr = decomp_res.data.get(comp)
+                    if arr is not None:
+                        comp_payload = _series_to_chart_payload(arr, max_points=body.max_chart_points)
+                        chart_data[comp] = comp_payload["values"]
+
+            if out_res.ok and len(out_res.data["outlier_table"]) > 0:
+                outlier_timestamps = [
+                    str(r["timestamp"])[:10] for _, r in out_res.data["outlier_table"].iterrows()
+                ]
+
+            Ft = decomp_res.metadata.get("trend_strength_Ft", 0) if decomp_res.ok else 0
+            Fs = decomp_res.metadata.get("seasonal_strength_Fs", 0) if decomp_res.ok else 0
+            d = decomp_res.metadata.get("differencing_order", 0) if decomp_res.ok else 0
+            interm_cls = interm_res.metadata.get("summary", {}).get("classification", "Smooth") if interm_res.ok else "Smooth"
+            model_rec = _recommend_model(interm_cls, Ft > 0.5, Fs > 0.5, d)
 
         summary = {
             "node_label": node_label,
@@ -749,6 +874,8 @@ if _HAS_FASTAPI:
             "n_rows_filtered": int(len(filtered)),
             "n_series_aggregated": n_agg,
             "agg_method": agg_fn if remaining_hier else "none (leaf)",
+            "safe_mode_used": use_safe_mode,
+            "analysis_mode": "lightweight" if use_safe_mode else "full",
             "series_stats": _safe(_series_stats(clean)),
             "decomp": _safe({
                 "trend_strength_Ft": decomp_res.metadata.get("trend_strength_Ft"),
@@ -759,12 +886,16 @@ if _HAS_FASTAPI:
                 "trend_stats": decomp_res.metadata.get("trend_stats"),
                 "interpretation": decomp_res.metadata.get("interpretation"),
                 "acf_significant_lags": decomp_res.metadata.get("acf_significant_lags"),
-            }) if decomp_res.ok else {},
-            "outliers": _safe(out_res.metadata.get("summary", {})) if out_res.ok else {},
-            "intermittency": _safe(interm_res.metadata.get("summary", {})) if interm_res.ok else {},
+            }) if decomp_res and decomp_res.ok else {},
+            "outliers": _safe(out_res.metadata.get("summary", {})) if out_res and out_res.ok else {},
+            "intermittency": _safe(interm_res.metadata.get("summary", {})) if interm_res and interm_res.ok else {},
             "missing_values": _safe(mv_res.metadata.get("completeness", {})) if mv_res.ok else {},
             "model_recommendation": model_rec,
             "intermittency_class": interm_cls,
+            "message": (
+                "Large dataset safe mode enabled. Returned summary and downsampled chart only; drill into a smaller node for full decomposition."
+                if use_safe_mode else ""
+            ),
         }
 
         return {
@@ -772,9 +903,9 @@ if _HAS_FASTAPI:
             "outlier_timestamps": outlier_timestamps,
             "summary": summary,
             "warnings": (
-                (decomp_res.warnings if decomp_res.ok else []) +
-                (out_res.warnings if out_res.ok else []) +
-                (interm_res.warnings if interm_res.ok else [])
+                (decomp_res.warnings if decomp_res and decomp_res.ok else []) +
+                (out_res.warnings if out_res and out_res.ok else []) +
+                (interm_res.warnings if interm_res and interm_res.ok else [])
             ),
         }
 
@@ -1145,12 +1276,20 @@ if _HAS_FASTAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root():
-        html_path = Path(__file__).parent / "ui" / "index.html"
-        if html_path.exists():
-            return HTMLResponse(html_path.read_text())
-        return HTMLResponse("<h1>TemporalMind – UI not found. Place index.html in ./ui/</h1>")
+        base_dir = Path(__file__).parent
+        candidate_paths = [
+            base_dir / "ui" / "index.html",
+            base_dir / "index.html",
+        ]
+        for html_path in candidate_paths:
+            if html_path.exists():
+                return HTMLResponse(html_path.read_text(encoding="utf-8"))
+        return HTMLResponse(
+            "<h1>TemporalMind UI not found. Place index.html in ./ui/ or project root.</h1>",
+            status_code=404,
+        )
 
-    @app.get("/health")
+  
     async def health():
         return {"status": "ok"}
 

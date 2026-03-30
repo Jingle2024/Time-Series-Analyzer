@@ -176,6 +176,17 @@ def hp_filter(y: np.ndarray, lamb: float = 1600.0) -> Tuple[np.ndarray, np.ndarr
     """
     y = np.asarray(y, dtype=float)
     n = len(y)
+
+    # The dense matrix form is O(n^2) in memory and becomes impossible for
+    # long series (for example 100k+ observations). Fall back to a smooth
+    # trend proxy instead of trying to allocate an n x n system.
+    if n > 5000:
+        window = min(1001, n if n % 2 == 1 else n - 1)
+        window = max(7, window)
+        trend = _savgol_trend(y, window)
+        cycle = y - trend
+        return cycle, trend
+
     I = np.eye(n)
     # Second difference matrix
     D = np.zeros((n - 2, n))
