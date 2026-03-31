@@ -2275,12 +2275,20 @@ if _HAS_FASTAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root():
-        html_path = Path(__file__).parent / "ui" / "index.html"
-        if html_path.exists():
-            return HTMLResponse(html_path.read_text())
-        return HTMLResponse("<h1>TemporalMind – UI not found. Place index.html in ./ui/</h1>")
+        base_dir = Path(__file__).parent
+        candidate_paths = [
+            base_dir / "ui" / "index.html",
+            base_dir / "index.html",
+        ]
+        for html_path in candidate_paths:
+            if html_path.exists():
+                return HTMLResponse(html_path.read_text(encoding="utf-8"))
+        return HTMLResponse(
+            "<h1>TemporalMind UI not found. Place index.html in ./ui/ or project root.</h1>",
+            status_code=404,
+        )
 
-    @app.get("/health")
+  
     async def health():
         return {"status": "ok"}
 
