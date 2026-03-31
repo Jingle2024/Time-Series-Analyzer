@@ -327,6 +327,33 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 .toast.info{border-color:rgba(59,130,246,.4);color:var(--a1)}
 
 @media(max-width:960px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}main{padding:14px}}
+/* ══ LEVEL STABILITY ══ */
+.interval-pill-row{display:flex;gap:6px;flex-wrap:wrap}
+.ipill{padding:5px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;
+  color:var(--tx2);cursor:pointer;transition:all .15s;font-family:'IBM Plex Mono',monospace;
+  background:transparent;user-select:none}
+.ipill:hover{border-color:var(--border2);color:var(--tx)}
+.ipill.active{background:rgba(59,130,246,.12);border-color:var(--a1);color:var(--a1)}
+.series-legend-item{display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 8px;
+  border-radius:6px;cursor:pointer;transition:all .15s;font-family:'IBM Plex Mono',monospace}
+.series-legend-item:hover{background:rgba(255,255,255,.05)}
+.series-legend-item.dimmed{opacity:.3}
+.legend-swatch{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.stab-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;
+  font-size:10px;letter-spacing:.5px;font-family:'IBM Plex Mono',monospace}
+.stab-stable{background:rgba(16,185,129,.15);color:var(--a3)}
+.stab-moderate{background:rgba(245,158,11,.15);color:var(--a2)}
+.stab-volatile{background:rgba(239,68,68,.15);color:var(--a5)}
+/* .yoy-cell{padding:6px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  text-align:right;border-radius:4px;transition:background .2s} */
+.season-bar-wrap{display:flex;flex-direction:column;gap:4px}
+.season-bar-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.season-bar-label{width:36px;color:var(--tx3);font-family:'IBM Plex Mono',monospace;flex-shrink:0;text-align:right}
+.season-bar-track{flex:1;height:10px;background:var(--bg3);border-radius:5px;overflow:visible;position:relative}
+.season-bar-fill{height:100%;border-radius:5px;transition:width .6s ease}
+.season-bar-val{width:60px;color:var(--tx2);font-family:'IBM Plex Mono',monospace;flex-shrink:0}
+.heatmap-cell{width:44px;height:32px;display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace;font-size:10px;border-radius:4px;cursor:default}
 </style>
 </head>
 <body>
@@ -343,8 +370,8 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
   <button class="tab-btn active" onclick="switchTab(0)" id="tab-0"><span class="tab-num">1</span>Upload Data</button>
   <button class="tab-btn" onclick="switchTab(1)" id="tab-1"><span class="tab-num">2</span>Time Series Analyzer</button>
   <button class="tab-btn" onclick="switchTab(2)" id="tab-2"><span class="tab-num">3</span>Cross-Correlation</button>
-  <button class="tab-btn" onclick="switchTab(3)" id="tab-3"><span class="tab-num">4</span>Prepare Data</button>
-</div>
+  <button class="tab-btn" onclick="switchTab(3)" id="tab-3"><span class="tab-num">4</span>Forecast Prep</button>
+  <button class="tab-btn" onclick="switchTab(4)" id="tab-4"><span class="tab-num">5</span>Level Stability</button></div>
 
 <main>
 
@@ -693,225 +720,373 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 
 <!-- ═══════════════ TAB 4 — PREPARE DATA ═══════════════ -->
 <div class="tab-panel" id="panel-3">
-  <div class="section-h">Prepare <em>Data</em></div>
-  <p class="section-sub">Step-by-step pipeline to produce a forecast-ready feature matrix.</p>
+  <div class="section-h">Forecast <em>Preparation</em></div>
+  <p class="section-sub">Build one model-ready series dataset with explicit train/validation/test/holdout/future splits.</p>
 
   <div class="alert alert-info" id="prep-no-data">⬆ Upload and confirm a dataset in Tab 1 first.</div>
 
   <div id="prep-content" style="display:none">
-    <div class="steps-bar" id="prep-steps-bar">
-      <div class="step-item active" onclick="goPrepStep(0)" id="pstep-0"><div class="step-dot">1</div>Interval</div>
-      <div class="step-item" onclick="goPrepStep(1)" id="pstep-1"><div class="step-dot">2</div>Hierarchy</div>
-      <div class="step-item" onclick="goPrepStep(2)" id="pstep-2"><div class="step-dot">3</div>Missing</div>
-      <div class="step-item" onclick="goPrepStep(3)" id="pstep-3"><div class="step-dot">4</div>Outliers</div>
-      <div class="step-item" onclick="goPrepStep(4)" id="pstep-4"><div class="step-dot">5</div>Features</div>
-      <div class="step-item" onclick="goPrepStep(5)" id="pstep-5"><div class="step-dot">6</div>Prepare</div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Mode &amp; Series</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-primary" id="prep-mode-single-btn" onclick="setPrepMode('single')">Single Series</button>
+        <button class="btn btn-secondary" id="prep-mode-hier-btn" onclick="setPrepMode('hierarchy')">Hierarchy Node</button>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Dependent Series</label>
+          <select class="form-control" id="prep-series-select"></select>
+        </div>
+        <div id="prep-hier-wrap" style="display:none">
+          <label class="form-label">Hierarchy Path</label>
+          <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:6px" id="prep-hier-note"></div>
+        </div>
+      </div>
     </div>
 
-    <!-- STEP 0: Interval -->
-    <div class="step-panel active" id="prep-step-0">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Configuration</div>
+      <div class="grid-3">
+        <div class="form-group">
+          <label class="form-label">Transform</label>
+          <select class="form-control" id="prep-transform">
+            <option value="auto">Auto</option>
+            <option value="none">None</option>
+            <option value="log">Log(1+y)</option>
+            <option value="diff">First difference</option>
+            <option value="log_diff">Log + Diff</option>
+            <option value="boxcox">Box-Cox</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scaling</label>
+          <select class="form-control" id="prep-scale">
+            <option value="minmax">MinMax [0,1]</option>
+            <option value="standard">Standard (z-score)</option>
+            <option value="robust">Robust (median/IQR)</option>
+            <option value="none">None</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Forecast Horizon</label>
+          <input type="number" class="form-control" id="prep-horizon" value="13" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Holdout Periods</label>
+          <input type="number" class="form-control" id="prep-holdout" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Train Ratio</label>
+          <input type="number" class="form-control" id="prep-train-ratio" value="0.70" min="0.1" max="0.95" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Validation Ratio</label>
+          <input type="number" class="form-control" id="prep-val-ratio" value="0.15" min="0" max="0.5" step="0.01">
+        </div>
+      </div>
+      <div class="grid-3" style="margin-top:6px">
+        <div class="form-group">
+          <label class="form-label">Interval Selection</label>
+          <select class="form-control" id="prep-interval-mode" onchange="setPrepIntervalMode()">
+            <option value="session">Use Session Interval</option>
+            <option value="advisor">Use Interval Advisor</option>
+            <option value="manual">Manual Interval</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Manual Interval</label>
+          <select class="form-control" id="prep-target-freq" disabled>
+            <option value="H">Hourly (H)</option>
+            <option value="D">Daily (D)</option>
+            <option value="W">Weekly (W)</option>
+            <option value="2W">Bi-Weekly (2W)</option>
+            <option value="MS" selected>Monthly (MS)</option>
+            <option value="QS">Quarterly (QS)</option>
+            <option value="AS">Yearly (AS)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity Type</label>
+          <select class="form-control" id="prep-qty-type">
+            <option value="flow" selected>Flow</option>
+            <option value="stock">Stock</option>
+            <option value="rate">Rate</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Accumulation Method</label>
+          <select class="form-control" id="prep-accum-method">
+            <option value="auto" selected>Auto</option>
+            <option value="sum">Sum</option>
+            <option value="mean">Mean</option>
+            <option value="median">Median</option>
+            <option value="last">Last</option>
+            <option value="first">First</option>
+            <option value="max">Max</option>
+            <option value="min">Min</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-3" style="margin-top:6px">
+        <div class="toggle-group" style="margin-top:24px">
+          <label class="toggle"><input type="checkbox" id="prep-apply-missing" checked><span class="toggle-slider"></span></label>
+          <span>Apply Missing Value Treatment</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Missing Method</label>
+          <select class="form-control" id="prep-missing-method">
+            <option value="auto" selected>Auto</option>
+            <option value="linear">Linear</option>
+            <option value="spline">Spline</option>
+            <option value="seasonal">Seasonal</option>
+            <option value="forward_fill">Forward Fill</option>
+            <option value="backward_fill">Backward Fill</option>
+            <option value="knn">KNN</option>
+            <option value="mean">Mean</option>
+            <option value="median">Median</option>
+            <option value="zero">Zero</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Missing Seasonal Period</label>
+          <input type="number" class="form-control" id="prep-missing-period" value="7" min="2">
+        </div>
+      </div>
+      <div class="grid-3" style="margin-top:6px">
+        <div class="toggle-group" style="margin-top:24px">
+          <label class="toggle"><input type="checkbox" id="prep-zero-missing"><span class="toggle-slider"></span></label>
+          <span>Treat zero as missing</span>
+        </div>
+        <div class="toggle-group" style="margin-top:24px">
+          <label class="toggle"><input type="checkbox" id="prep-apply-outlier" checked><span class="toggle-slider"></span></label>
+          <span>Apply Outlier Treatment</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Outlier Treatment</label>
+          <select class="form-control" id="prep-outlier-treatment">
+            <option value="cap" selected>Cap (IQR fence)</option>
+            <option value="remove">Remove + Impute</option>
+            <option value="keep">Keep (detect only)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:6px">
+        <label class="form-label">Outlier Methods</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-iqr" checked> IQR</label>
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-zscore" checked> Z-Score</label>
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-isof" checked> IsolationForest</label>
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-lof"> LOF</label>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-top:6px">
+        <div class="form-group">
+          <label class="form-label">Rolling Windows (comma-separated)</label>
+          <input type="text" class="form-control" id="prep-windows" value="7,14,28">
+        </div>
+        <div class="toggle-group" style="margin-top:24px">
+          <label class="toggle"><input type="checkbox" id="prep-calendar" checked><span class="toggle-slider"></span></label>
+          <span>Calendar features</span>
+        </div>
+      </div>
+      <div class="toggle-group" style="margin-top:4px">
+        <label class="toggle"><input type="checkbox" id="prep-neg-allowed"><span class="toggle-slider"></span></label>
+        <span>Negative Forecast Allowed</span>
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Export Format</label>
+        <div class="radio-pills">
+          <div class="radio-pill"><input type="radio" name="prep-out-fmt" id="prep-out-excel" value="excel" checked><label for="prep-out-excel">Excel (.xlsx)</label></div>
+          <div class="radio-pill"><input type="radio" name="prep-out-fmt" id="prep-out-csv" value="csv"><label for="prep-out-csv">CSV Bundle (.zip)</label></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px">
+        <button class="btn btn-primary btn-lg" id="run-forecast-prep-btn" onclick="runForecastPrep()">Run Forecast Preparation</button>
+      </div>
+      <div id="prep-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Preparing series…</span></div>
+    </div>
+
+    <div id="prep-results" style="display:none">
+      <div class="grid-4" id="prep-stats-row" style="margin-bottom:16px"></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Timeline</div>
+        <canvas id="prep-timeline-chart" height="110"></canvas>
+        <div id="prep-timeline-meta" style="margin-top:8px;font-size:12px;color:var(--tx2)"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Model Parameters</div>
+        <div id="prep-model-params" class="grid-3"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Model Comparison (MAPE)</div>
+        <div id="prep-model-best" style="margin-bottom:8px;font-size:12px;color:var(--tx2)"></div>
+        <div class="tbl-wrap" id="prep-model-compare" style="max-height:220px;overflow:auto"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Feature Matrix Preview</div>
+        <div class="tbl-wrap" id="prep-feature-preview" style="max-height:280px;overflow:auto"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Future Frame Preview</div>
+        <div class="tbl-wrap" id="prep-future-preview" style="max-height:220px;overflow:auto"></div>
+      </div>
       <div class="card">
-        <div class="card-title">🕐 Select Analysis Interval</div>
-        <p style="font-size:13px;color:var(--tx2);margin-bottom:18px">Interval Advisor uses FFT + SNR analysis to recommend the optimal temporal resolution.</p>
-        <button class="btn btn-primary" onclick="runIntervalAdvice()" id="interval-advice-btn">🔍 Get Recommendations</button>
-        <div id="interval-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Analysing frequency…</span></div>
-        <div id="interval-results" style="display:none;margin-top:18px">
-          <div id="interval-recs-grid" class="grid-3" style="margin-bottom:18px"></div>
-          <div class="form-group"><label class="form-label">Override Interval</label><div class="radio-pills" id="interval-pills"></div></div>
-          <div id="interval-chosen-display" style="margin-top:10px;font-size:13px;color:var(--tx2)"></div>
+        <div class="card-title">Agent Report</div>
+        <pre id="prep-report" style="white-space:pre-wrap;color:var(--tx2);font-size:12px;line-height:1.45;margin:0"></pre>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">Export</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-download btn-lg" onclick="downloadForecastPrep()">⬇ Download Forecast Prep Output</button>
+          <span id="prep-export-info" style="font-size:12px;color:var(--tx2)"></span>
         </div>
       </div>
-      <div style="margin-top:14px;display:flex;justify-content:flex-end">
-        <button class="btn btn-primary" onclick="applyAccumulation();goPrepStep(1)">Apply &amp; Next →</button>
-      </div>
-    </div>
-
-    <!-- STEP 1: Hierarchy -->
-    <div class="step-panel" id="prep-step-1">
-      <div class="card">
-        <div class="card-title">🌲 Hierarchy Aggregation</div>
-        <div id="hier-na" style="display:none"><div class="alert alert-info">No hierarchy columns — this step is not applicable.</div></div>
-        <div id="hier-app" style="display:none">
-          <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">Aggregate leaf series up the hierarchy tree and view level effects.</p>
-          <div class="grid-2" style="margin-bottom:16px">
-            <div class="form-group">
-              <label class="form-label">Aggregation Method</label>
-              <select class="form-control" id="hier-method">
-                <option value="sum">Sum (additive — flow quantities)</option>
-                <option value="mean">Mean (stock / rate)</option>
-                <option value="median">Median (robust)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">View Level</label>
-              <select class="form-control" id="hier-level-select"></select>
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="runHierarchy()">⚡ Run Aggregation</button>
-          <div id="hier-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Building hierarchy…</span></div>
-          <div id="hier-results" style="display:none;margin-top:16px">
-            <div id="hier-level-effects" class="grid-4" style="margin-bottom:14px"></div>
-            <div class="tbl-wrap" id="hier-preview-tbl"></div>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:14px;display:flex;justify-content:space-between">
-        <button class="btn btn-secondary" onclick="goPrepStep(0)">← Back</button>
-        <button class="btn btn-primary" onclick="goPrepStep(2)">Next →</button>
-      </div>
-    </div>
-
-    <!-- STEP 2: Missing Values -->
-    <div class="step-panel" id="prep-step-2">
-      <div class="card">
-        <div class="card-title">🕳 Missing Values Treatment</div>
-        <div class="grid-2" style="margin-bottom:16px">
-          <div class="form-group">
-            <label class="form-label">Imputation Method</label>
-            <select class="form-control" id="mv-method">
-              <option value="auto">Auto (recommended)</option>
-              <option value="linear">Linear interpolation</option>
-              <option value="spline">Cubic spline</option>
-              <option value="seasonal">Seasonal fill</option>
-              <option value="knn">KNN imputation</option>
-              <option value="forward_fill">Forward fill</option>
-              <option value="backward_fill">Backward fill</option>
-              <option value="mean">Global mean</option>
-              <option value="median">Global median</option>
-              <option value="zero">Fill with zero</option>
-            </select>
-          </div>
-          <div>
-            <div class="form-group"><label class="form-label">Seasonal Period</label><input type="number" class="form-control" id="mv-period" value="7" min="2"></div>
-            <div class="toggle-group"><label class="toggle"><input type="checkbox" id="mv-zero-as-missing"><span class="toggle-slider"></span></label><span>Treat zeros as missing</span></div>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="runMissingValues()">⚡ Apply Treatment</button>
-        <div id="mv-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Imputing…</span></div>
-        <div id="mv-results" style="display:none;margin-top:16px">
-          <div id="mv-summary-grid" class="grid-4" style="margin-bottom:12px"></div>
-          <div class="tbl-wrap" id="mv-preview-tbl" style="max-height:200px;overflow-y:auto"></div>
-        </div>
-      </div>
-      <div style="margin-top:14px;display:flex;justify-content:space-between">
-        <button class="btn btn-secondary" onclick="goPrepStep(1)">← Back</button>
-        <button class="btn btn-primary" onclick="goPrepStep(3)">Next →</button>
-      </div>
-    </div>
-
-    <!-- STEP 3: Outliers -->
-    <div class="step-panel" id="prep-step-3">
-      <div class="card">
-        <div class="card-title">⚡ Outlier Detection &amp; Treatment</div>
-        <div class="grid-2" style="margin-bottom:16px">
-          <div>
-            <label class="form-label">Detection Methods</label>
-            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="out-iqr" checked style="accent-color:var(--a1)"> IQR (1.5× fence)</label>
-              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="out-zscore" checked style="accent-color:var(--a1)"> Z-score (|z|>3)</label>
-              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="out-isof" checked style="accent-color:var(--a1)"> Isolation Forest</label>
-              <label style="display:flex;gap:10px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer"><input type="checkbox" id="out-lof" style="accent-color:var(--a1)"> Local Outlier Factor</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Treatment Action</label>
-            <select class="form-control" id="out-treatment">
-              <option value="cap">Cap to IQR fences</option>
-              <option value="remove">Remove → re-impute</option>
-              <option value="keep">Keep (flag only)</option>
-            </select>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="runOutliers()">⚡ Detect &amp; Treat</button>
-        <div id="out-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Detecting outliers…</span></div>
-        <div id="out-results" style="display:none;margin-top:16px">
-          <div id="out-summary-grid" class="grid-4" style="margin-bottom:12px"></div>
-          <div class="tbl-wrap" id="out-preview-tbl" style="max-height:200px;overflow-y:auto"></div>
-        </div>
-      </div>
-      <div style="margin-top:14px;display:flex;justify-content:space-between">
-        <button class="btn btn-secondary" onclick="goPrepStep(2)">← Back</button>
-        <button class="btn btn-primary" onclick="goPrepStep(4)">Next →</button>
-      </div>
-    </div>
-
-    <!-- STEP 4: Features -->
-    <div class="step-panel" id="prep-step-4">
-      <div class="card">
-        <div class="card-title">⚙ Feature Engineering</div>
-        <div class="grid-2" style="gap:22px">
-          <div>
-            <div class="form-group"><label class="form-label">Transform</label>
-              <select class="form-control" id="prep-transform"><option value="auto">Auto</option><option value="none">None</option><option value="log">Log(1+y)</option><option value="diff">First difference</option><option value="log_diff">Log + Diff</option><option value="boxcox">Box-Cox</option></select></div>
-            <div class="form-group"><label class="form-label">Scaling</label>
-              <select class="form-control" id="prep-scale"><option value="minmax">MinMax [0,1]</option><option value="standard">Standard (z-score)</option><option value="robust">Robust (median/IQR)</option><option value="none">None</option></select></div>
-            <div class="form-group"><label class="form-label">Forecast Horizon (periods)</label><input type="number" class="form-control" id="prep-horizon" value="13" min="1"></div>
-          </div>
-          <div>
-            <div class="form-group"><label class="form-label">Rolling Windows (comma-separated)</label><input type="text" class="form-control" id="prep-windows" value="7,14,28"></div>
-            <div style="margin-bottom:14px">
-              <label class="form-label">Train / Val / Test Split</label>
-              <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-                <span style="font-size:12px;color:var(--tx2);width:38px">Train</span>
-                <input type="range" id="train-ratio" min="40" max="85" value="70" oninput="updateSplitDisplay()">
-                <span style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--a3);width:34px" id="train-val">70%</span>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
-                <span style="font-size:12px;color:var(--tx2);width:38px">Val</span>
-                <input type="range" id="val-ratio" min="5" max="25" value="15" oninput="updateSplitDisplay()">
-                <span style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--a2);width:34px" id="val-val">15%</span>
-              </div>
-              <div style="margin-top:5px;font-size:12px;color:var(--tx3)">Test = remaining (<span id="test-val">15%</span>)</div>
-            </div>
-            <div class="toggle-group"><label class="toggle"><input type="checkbox" id="prep-calendar" checked><span class="toggle-slider"></span></label><span>Calendar features</span></div>
-          </div>
-        </div>
-        <div class="form-group" style="margin-top:14px">
-          <label class="form-label">Output Format</label>
-          <div class="radio-pills">
-            <div class="radio-pill"><input type="radio" name="out-fmt" id="fmt-csv" value="csv" checked><label for="fmt-csv">CSV</label></div>
-            <div class="radio-pill"><input type="radio" name="out-fmt" id="fmt-excel" value="excel"><label for="fmt-excel">Excel (.xlsx)</label></div>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:14px;display:flex;justify-content:space-between">
-        <button class="btn btn-secondary" onclick="goPrepStep(3)">← Back</button>
-        <button class="btn btn-primary" onclick="goPrepStep(5)">Next →</button>
-      </div>
-    </div>
-
-    <!-- STEP 5: Final Prepare -->
-    <div class="step-panel" id="prep-step-5">
-      <div class="card" style="margin-bottom:18px">
-        <div class="card-title">🚀 Prepare Data for Forecasting</div>
-        <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">Generates lag features, rolling statistics, calendar encodings, train/val/test labels, and model type recommendations. Independent and event variables are automatically attached as exogenous features.</p>
-        <div id="prep-dep-role-note" style="margin-bottom:12px;font-size:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
-        <div id="prep-config-summary" style="margin-bottom:16px"></div>
-        <button class="btn btn-primary btn-lg" onclick="runPrepare()">⚡ Generate Dataset</button>
-        <div id="prep-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Running preparation pipeline…</span></div>
-      </div>
-      <div id="prep-results" style="display:none">
-        <div class="grid-4" id="prep-stats-row" style="margin-bottom:18px"></div>
-        <div class="card" style="margin-bottom:18px"><div class="card-title">🤖 Model Type Recommendations</div><div id="model-recs-table"></div></div>
-        <div class="card" style="margin-bottom:18px">
-          <div class="card-title">📋 Preview</div>
-          <div style="margin-bottom:10px;font-size:12px;color:var(--tx2)" id="prep-col-list"></div>
-          <div class="tbl-wrap" id="prep-preview-tbl" style="max-height:340px;overflow-y:auto;overflow-x:auto"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">💾 Download</div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-            <button class="btn btn-download btn-lg" onclick="downloadData()">⬇ Download Dataset</button>
-            <span id="download-info" style="font-size:13px;color:var(--tx2)"></span>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:14px"><button class="btn btn-secondary" onclick="goPrepStep(4)">← Back</button></div>
     </div>
   </div>
 </div>
-<!-- END TAB 3 -->
+<!-- END TAB 4 -->
+<!-- ═══════════════ TAB 5 — LEVEL STABILITY ═══════════════ -->
+<div class="tab-panel" id="panel-4">
+  <div class="section-h">Level <em>Stability Analysis</em></div>
+  <p class="section-sub">
+    Superimpose all series at a chosen hierarchy level. Analyse stability across time intervals —
+    Day · Week · Month · Quarter · Semi-year · Year — and detect seasonal patterns, cross-series
+    divergence, and year-over-year consistency.
+  </p>
 
+  <div class="alert alert-info" id="stab-no-data">⬆ Upload and confirm a hierarchical dataset in Tab 1 first.</div>
+
+  <div id="stab-ready" style="display:none">
+
+    <!-- ─── CONTROLS ─── -->
+    <div class="card" style="margin-bottom:18px">
+      <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end">
+
+        <!-- Level selector -->
+        <div class="form-group" style="flex:0 0 200px;margin:0">
+          <label class="form-label">Hierarchy Level</label>
+          <select class="form-control" id="stab-level-sel" style="padding:7px 10px" onchange="onStabLevelChange()"></select>
+        </div>
+
+        <!-- Parent filter (cascading) -->
+        <div id="stab-parent-filters" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;flex:1"></div>
+
+        <!-- Value column -->
+        <div class="form-group" style="flex:0 0 160px;margin:0">
+          <label class="form-label">Value Column</label>
+          <select class="form-control" id="stab-val-col" style="padding:7px 10px"></select>
+        </div>
+
+        <!-- Aggregation -->
+        <div class="form-group" style="flex:0 0 130px;margin:0">
+          <label class="form-label">Aggregate</label>
+          <select class="form-control" id="stab-agg" style="padding:7px 10px">
+            <option value="sum">Sum</option>
+            <option value="mean">Mean</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary" onclick="runStabilityAnalysis()">▶ Analyse</button>
+      </div>
+
+      <!-- Interval pills -->
+      <div style="margin-top:16px">
+        <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
+          Time Interval for Analysis
+        </div>
+        <div class="interval-pill-row" id="stab-interval-pills">
+          <div class="ipill" onclick="selectStabInterval('D','Day')"     data-int="D">Day</div>
+          <div class="ipill active" onclick="selectStabInterval('W','Week')"  data-int="W">Week</div>
+          <div class="ipill" onclick="selectStabInterval('M','Month')"   data-int="M">Month</div>
+          <div class="ipill" onclick="selectStabInterval('Q','Quarter')" data-int="Q">Quarter</div>
+          <div class="ipill" onclick="selectStabInterval('6M','Semi-year')" data-int="6M">Semi-year</div>
+          <div class="ipill" onclick="selectStabInterval('Y','Year')"    data-int="Y">Year</div>
+          <div class="ipill" onclick="selectStabInterval('native','Native')" data-int="native">Native</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="stab-loader" style="display:none" class="loader-wrap">
+      <div class="spinner"></div><span class="loader-text" id="stab-loader-msg">Computing stability analysis…</span>
+    </div>
+
+    <!-- ─── RESULTS ─── -->
+    <div id="stab-results" style="display:none">
+
+      <!-- Context banner -->
+      <div id="stab-context-banner" style="margin-bottom:18px"></div>
+
+      <!-- MAIN superimposed chart -->
+      <div class="card" style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+          <div class="card-title" style="margin:0">📈 Superimposed Series</div>
+          <div style="display:flex;gap:8px;margin-left:auto;flex-shrink:0">
+            <button class="btn btn-sm btn-ghost" onclick="toggleEnvelope()" id="env-toggle-btn">Show Envelope</button>
+            <button class="btn btn-sm btn-ghost" onclick="toggleAllSeries(true)">Show All</button>
+            <button class="btn btn-sm btn-ghost" onclick="toggleAllSeries(false)">Hide All</button>
+          </div>
+        </div>
+        <!-- Series legend (interactive) -->
+        <div id="stab-series-legend" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px"></div>
+        <canvas id="stab-main-chart" height="240"></canvas>
+      </div>
+
+      <!-- Envelope chart (mean ± std) -->
+      <div class="card" style="margin-bottom:18px" id="stab-envelope-card">
+        <div class="card-title">📊 Cross-Series Envelope (Mean ± Std · Min/Max Range · CV)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div class="chart-title">Mean ± Std Band</div>
+            <canvas id="stab-envelope-chart" height="160"></canvas>
+          </div>
+          <div>
+            <div class="chart-title">Coefficient of Variation (CV) over time</div>
+            <canvas id="stab-cv-chart" height="160"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seasonal profile -->
+      <div class="grid-2" style="gap:18px;margin-bottom:18px">
+        <div class="card">
+          <div class="card-title">🗓 Seasonal Profile (avg per sub-period)</div>
+          <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">
+            Average value at each calendar sub-period across all years and series.
+            Taller bars = stronger seasonal peak.
+          </div>
+          <canvas id="stab-season-chart" height="180"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">📐 Seasonal CV (stability per sub-period)</div>
+          <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">
+            How much the series <em>disagree</em> within each season.
+            Lower CV = more consistent behaviour across series and years.
+          </div>
+          <canvas id="stab-season-cv-chart" height="180"></canvas>
+        </div>
+      </div>
+
+      <!-- Year-over-Year heatmap -->
+      <div class="card" style="margin-bottom:18px">
+        <div class="card-title">📅 Year-over-Year Heatmap (series × year)</div>
+        <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">
+          Each cell = total / average for that series in that year.
+          Colour intensity shows relative level — useful for spotting structural breaks.
+        </div>
+        <div style="overflow-x:auto" id="stab-yoy-heatmap"></div>
+      </div>
+
+      <!-- Stability stats table -->
+      <div class="card">
+        <div class="card-title">📋 Per-Series Stability Statistics</div>
+        <div class="tbl-wrap" id="stab-stats-table"></div>
+      </div>
+
+    </div><!-- /#stab-results -->
+  </div><!-- /#stab-ready -->
+</div>
+<!-- END TAB 5 -->
 </main>
 <div id="toast-container"></div>
 <script>
@@ -924,11 +1099,13 @@ const S = {
   valueCols: [], hierCols: [], isHierarchy: false,
   varRoles: {}, depCols: [], indepCols: [], eventCols: [],
   targetFreq: null, downloadToken: null, downloadExt: 'csv',
+  forecastDownloadToken: null, forecastDownloadExt: 'xlsx',
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
   currentNodePath: {},   // {region:"North", country:"UK", ...}
   analyzeMode: 'single', // 'single' | 'hierarchy'
   charts: {},
+  prepMode: 'single',
 };
 
 // ════════════════════════════════════════════════════════════
@@ -1007,13 +1184,14 @@ async function checkApiStatus() {
 // TABS
 // ════════════════════════════════════════════════════════════
 function switchTab(idx) {
-  [0,1,2,3].forEach(i=>{
+  [0,1,2,3,4].forEach(i=>{
     const tb=document.getElementById(`tab-${i}`); if(tb) tb.classList.toggle('active',i===idx);
     const pn=document.getElementById(`panel-${i}`); if(pn) pn.classList.toggle('active',i===idx);
   });
   if(idx===1) initAnalyzerTab();
   if(idx===2) initCCTab();
   if(idx===3) initPrepTab();
+  if(idx===4) initStabilityTab();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1639,173 +1817,317 @@ function modelFromDecomp(dc,ic) {
 // ════════════════════════════════════════════════════════════
 function initPrepTab(){
   if(!S.token){show('prep-no-data');hide('prep-content');return;}
-  // if roles set, propagate into the dep/indep summary
-  if(S.depCols&&S.depCols.length){
-    const prepSummary=document.getElementById('prep-dep-role-note');
-    if(prepSummary) prepSummary.innerHTML=
-      `<span class="td-tag tag-dep">🎯 Dep:</span> ${S.depCols.join(', ')}` +
-      (S.indepCols.length?` &nbsp;·&nbsp; <span class="td-tag tag-indep">📈 Indep:</span> ${S.indepCols.join(', ')}`:'') +
-      (S.eventCols.length?` &nbsp;·&nbsp; <span class="td-tag tag-event">⚡ Events:</span> ${S.eventCols.join(', ')}` :'');
-  }
   hide('prep-no-data'); show('prep-content');
-  if(!S.isHierarchy){show('hier-na');hide('hier-app');}
-  else{hide('hier-na');show('hier-app');
-    const sel=document.getElementById('hier-level-select');
-    sel.innerHTML=`<option value="">All levels</option>`+S.hierCols.map((c,i)=>`<option value="level_${i+1}">${c}</option>`).join('');
+  loadSeriesList();
+  setPrepMode(S.isHierarchy ? 'hierarchy' : 'single');
+  setPrepIntervalMode();
+}
+
+function setPrepMode(mode){
+  S.prepMode = (mode === 'hierarchy' && S.isHierarchy) ? 'hierarchy' : 'single';
+  const sb=document.getElementById('prep-mode-single-btn');
+  const hb=document.getElementById('prep-mode-hier-btn');
+  if(sb && hb){
+    if(S.prepMode === 'single'){
+      sb.className='btn btn-primary';
+      hb.className='btn btn-secondary';
+    } else {
+      hb.className='btn btn-primary';
+      sb.className='btn btn-secondary';
+    }
   }
-  updateSplitDisplay();
-  updatePrepConfigSummary();
+  if(S.prepMode === 'hierarchy' && S.isHierarchy){
+    show('prep-hier-wrap');
+    buildPrepHierCascade();
+  } else {
+    hide('prep-hier-wrap');
+  }
 }
 
-function goPrepStep(idx){
-  [0,1,2,3,4,5].forEach(i=>{
-    document.getElementById(`prep-step-${i}`).classList.toggle('active',i===idx);
-    const s=document.getElementById(`pstep-${i}`);
-    s.classList.remove('active','done');
-    if(i<idx) s.classList.add('done');
-    else if(i===idx) s.classList.add('active');
+function setPrepIntervalMode(){
+  const mode=document.getElementById('prep-interval-mode')?.value||'session';
+  const freqSel=document.getElementById('prep-target-freq');
+  if(freqSel) freqSel.disabled = (mode!=='manual');
+}
+
+async function loadSeriesList(){
+  const sel=document.getElementById('prep-series-select');
+  if(!sel) return;
+  const dep=(S.depCols&&S.depCols.length?S.depCols:(S.valueCols||[]));
+  sel.innerHTML=dep.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(S.isHierarchy && (!S.hierTree || !S.hierLevels || !S.hierLevels.length)){
+    try{
+      const r=await api('/api/hierarchy-tree',{token:S.token});
+      S.hierTree=r.tree; S.hierLevels=r.levels; S.hierLevelValues=r.level_values;
+    }catch(e){
+      toast(`Hierarchy tree unavailable: ${e.message}`,'err');
+    }
+  }
+}
+
+function buildPrepHierCascade(){
+  const wrap=document.getElementById('prep-hier-cascade');
+  if(!wrap || !S.hierLevels || !S.hierLevels.length) return;
+  wrap.innerHTML='';
+  S.hierLevels.forEach((lvl,idx)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:8px;align-items:center';
+    const badge=document.createElement('span');
+    badge.style.cssText='font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--a4);min-width:85px';
+    badge.textContent=lvl;
+    const sel=document.createElement('select');
+    sel.className='form-control';
+    sel.id=`prep-hier-${idx}`;
+    if(idx>0) sel.disabled=true;
+    row.appendChild(badge);
+    row.appendChild(sel);
+    wrap.appendChild(row);
   });
-  if(idx===5) updatePrepConfigSummary();
+
+  const updatePrepHierNote=()=>{
+    const note=document.getElementById('prep-hier-note');
+    if(!note) return;
+    const parts=[];
+    for(let k=0;k<S.hierLevels.length;k++){
+      const s=document.getElementById(`prep-hier-${k}`);
+      if(!s || !s.value) break;
+      parts.push(`${S.hierLevels[k]}=${s.value}`);
+    }
+    if(!parts.length){
+      note.textContent='Choose one or more hierarchy levels. Leave lower levels as All to prepare an aggregated forecast.';
+      return;
+    }
+    const isLeaf=parts.length===S.hierLevels.length;
+    note.textContent=isLeaf
+      ? `Selected leaf node: ${parts.join(' > ')}`
+      : `Selected aggregate node: ${parts.join(' > ')} (lower levels remain All and will be aggregated)`;
+  };
+
+  const fillLevel=(idx, subtree)=>{
+    const sel=document.getElementById(`prep-hier-${idx}`);
+    if(!sel) return;
+    const options=Object.keys(subtree||{});
+    sel.innerHTML=`<option value="">All</option>`+options.map(v=>`<option value="${v}">${v}</option>`).join('');
+    sel.disabled=false;
+    sel.onchange=()=>{
+      for(let j=idx+1;j<S.hierLevels.length;j++){
+        const nxt=document.getElementById(`prep-hier-${j}`);
+        if(nxt){
+          nxt.innerHTML='<option value="">All</option>';
+          nxt.disabled=true;
+          nxt.value='';
+        }
+      }
+      if(sel.value){
+        const nextSub=(subtree||{})[sel.value]||{};
+        if(idx+1<S.hierLevels.length) fillLevel(idx+1,nextSub);
+      }
+      updatePrepHierNote();
+    };
+  };
+  fillLevel(0,S.hierTree||{});
+  updatePrepHierNote();
 }
 
-function updateSplitDisplay(){
-  const tr=parseInt(document.getElementById('train-ratio').value);
-  const vr=parseInt(document.getElementById('val-ratio').value);
-  document.getElementById('train-val').textContent=tr+'%';
-  document.getElementById('val-val').textContent=vr+'%';
-  document.getElementById('test-val').textContent=Math.max(0,100-tr-vr)+'%';
-}
-
-function updatePrepConfigSummary(){
-  const tr=document.getElementById('train-ratio')?.value||70;
-  const vr=document.getElementById('val-ratio')?.value||15;
-  const t=document.getElementById('prep-transform')?.value||'auto';
-  const sc=document.getElementById('prep-scale')?.value||'minmax';
-  const h=document.getElementById('prep-horizon')?.value||13;
-  const fmt=document.querySelector('input[name="out-fmt"]:checked')?.value||'csv';
-  setHtml('prep-config-summary',`<div style="display:flex;flex-wrap:wrap;gap:8px">
-    ${chip('Interval',S.targetFreq||'auto','blue')}${chip('Transform',t,'amber')}${chip('Scale',sc,'green')}
-    ${chip('Horizon',h+' periods','violet')}${chip('Split',`${tr}/${vr}/${Math.max(0,100-parseInt(tr)-parseInt(vr))}`,'blue')}${chip('Format',fmt.toUpperCase(),'green')}
-  </div>`);
-}
-
-function chip(label,val,color){
-  const colors={blue:'var(--a1)',amber:'var(--a2)',green:'var(--a3)',violet:'var(--a4)'};
-  return `<span style="background:rgba(59,130,246,.08);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;color:${colors[color]||'var(--tx2)'}"><span style="color:var(--tx3)">${label}:</span> ${val}</span>`;
-}
-
-async function runIntervalAdvice(){
+async function runForecastPrep(){
   if(!S.token) return;
-  show('interval-loader'); hide('interval-results');
-  document.getElementById('interval-advice-btn').disabled=true;
-  try {
-    const r=await api('/api/interval-advice',{token:S.token,top_n:5});
-    renderIntervalRecs(r);
-    show('interval-results');
-    toast('Interval advice ready ✓','ok');
-  } catch(e){toast(`Interval error: ${e.message}`,'err');}
-  finally{hide('interval-loader');document.getElementById('interval-advice-btn').disabled=false;}
-}
+  const depCol=document.getElementById('prep-series-select')?.value;
+  if(!depCol){toast('Select a dependent series','err');return;}
+  const windows=(document.getElementById('prep-windows')?.value||'7,14,28')
+    .split(',').map(v=>parseInt(v.trim(),10)).filter(v=>!isNaN(v)&&v>0);
+  const outlierMethods=[
+    document.getElementById('prep-outlier-iqr')?.checked ? 'iqr' : null,
+    document.getElementById('prep-outlier-zscore')?.checked ? 'zscore' : null,
+    document.getElementById('prep-outlier-isof')?.checked ? 'isof' : null,
+    document.getElementById('prep-outlier-lof')?.checked ? 'lof' : null,
+  ].filter(Boolean);
+  if((document.getElementById('prep-apply-outlier')?.checked??true) && !outlierMethods.length){
+    toast('Select at least one outlier method','err');
+    return;
+  }
+  const nodePath={};
+  if(S.prepMode==='hierarchy'){
+    for(let i=0;i<(S.hierLevels||[]).length;i++){
+      const v=document.getElementById(`prep-hier-${i}`)?.value;
+      if(v) nodePath[S.hierLevels[i]]=v;
+    }
+    if(!Object.keys(nodePath).length){toast('Select a hierarchy path','err');return;}
+  }
 
-function renderIntervalRecs(r){
-  const recs=r.recommendations||[];
-  setHtml('interval-recs-grid',recs.slice(0,3).map((rec,i)=>`
-    <div style="background:var(--bg2);border:1px solid ${i===0?'var(--a1)':'var(--border)'};border-radius:10px;padding:16px;cursor:pointer;transition:all .2s"
-         onclick="selectInterval('${rec.freq}','${rec.alias}')">
-      ${i===0?`<div style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--a1);margin-bottom:5px;letter-spacing:1px">★ RECOMMENDED</div>`:''}
-      <div style="font-family:'Instrument Serif',serif;font-size:20px;margin-bottom:3px">${rec.alias}</div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--a6);margin-bottom:8px">${rec.freq}</div>
-      <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:6px">
-        <div style="height:100%;width:${Math.min(100,rec.score)}%;background:var(--a1);border-radius:2px"></div>
-      </div>
-      <div style="font-size:11px;color:var(--tx3)">Info loss: ${rec.info_loss_pct}%</div>
-      <div style="font-size:11px;color:var(--tx2);margin-top:3px">${rec.rationale.split(';')[0]}</div>
-    </div>`).join(''));
-  const allFreqs=['H','D','W','2W','MS','QS','AS'];
-  setHtml('interval-pills',allFreqs.map(f=>`<div class="radio-pill"><input type="radio" name="interval-pick" id="ip-${f}" value="${f}" ${f===r.best_freq?'checked':''} onchange="selectInterval('${f}','${f}')"><label for="ip-${f}">${f}</label></div>`).join(''));
-  S.targetFreq=r.best_freq;
-  setHtml('interval-chosen-display',`<span style="color:var(--tx3)">Selected:</span> <strong style="color:var(--a1)">${r.best_alias} (${r.best_freq})</strong>`);
-}
-
-function selectInterval(freq,alias){
-  S.targetFreq=freq;
-  const ip=document.getElementById(`ip-${freq}`);
-  if(ip) ip.checked=true;
-  setHtml('interval-chosen-display',`<span style="color:var(--tx3)">Selected:</span> <strong style="color:var(--a1)">${alias} (${freq})</strong>`);
-}
-
-async function applyAccumulation(){
-  if(!S.token||!S.targetFreq){toast('No interval selected','err');return;}
-  try{await api('/api/accumulate',{token:S.token,target_freq:S.targetFreq,method:'auto',quantity_type:'flow'});toast(`Accumulated to ${S.targetFreq} ✓`,'ok');}
-  catch(e){toast(`Accumulation: ${e.message}`,'err');}
-}
-
-async function runHierarchy(){
-  if(!S.token||!S.isHierarchy) return;
-  show('hier-loader'); hide('hier-results');
-  try{
-    const r=await api('/api/hierarchy',{token:S.token,method:document.getElementById('hier-method').value});
-    const eff=r.level_effects||{};
-    setHtml('hier-level-effects',Object.entries(eff).map(([lvl,e])=>statCard(fmtNum(e.avg_cv,4),`${lvl} CV`,e.interpretation,'var(--tx)')).join(''));
-    const rows=Object.entries(r.level_groups||{}).map(([l,k])=>({'Level':l,'Series':k.length,'Example':k[0]||'—'}));
-    setHtml('hier-preview-tbl',buildTable(rows,['Level','Series','Example']));
-    show('hier-results'); toast('Hierarchy built ✓','ok');
-  }catch(e){toast(`Hierarchy: ${e.message}`,'err');}
-  finally{hide('hier-loader');}
-}
-
-async function runMissingValues(){
-  if(!S.token) return;
-  show('mv-loader'); hide('mv-results');
-  try{
-    const r=await api('/api/missing-values',{token:S.token,method:document.getElementById('mv-method').value,period:parseInt(document.getElementById('mv-period').value)||7,zero_as_missing:document.getElementById('mv-zero-as-missing').checked});
-    const stats=Object.values(r.results||{})[0]||{};
-    setHtml('mv-summary-grid',[statCard(stats.n_missing_before||0,'Missing Before','',stats.n_missing_before?'var(--a2)':'var(--a3)'),statCard(stats.n_missing_after||0,'After','',stats.n_missing_after?'var(--a5)':'var(--a3)'),statCard(stats.pattern||'—','Pattern'),statCard(stats.method_used||'—','Method','','var(--a6)')].join(''));
-    setHtml('mv-preview-tbl',buildTable(r.preview||[]));
-    show('mv-results'); toast('Missing values treated ✓','ok');
-  }catch(e){toast(`Missing: ${e.message}`,'err');}
-  finally{hide('mv-loader');}
-}
-
-async function runOutliers(){
-  if(!S.token) return;
-  show('out-loader'); hide('out-results');
-  const methods=['iqr','zscore','isof','lof'].filter(m=>document.getElementById(`out-${m}`)?.checked);
-  try{
-    const r=await api('/api/outliers',{token:S.token,methods,treatment:document.getElementById('out-treatment').value});
-    const stats=Object.values(r.summary||{})[0]||{};
-    setHtml('out-summary-grid',[statCard(stats.n_outliers||0,'Outliers',`${fmtNum(stats.pct_outliers,1)}%`,stats.n_outliers?'var(--a2)':'var(--a3)'),statCard(stats.high_severity||0,'HIGH','','var(--a5)'),statCard(stats.medium_severity||0,'MED','','var(--a2)'),statCard(r.treatment_applied||'—','Treatment','','var(--a6)')].join(''));
-    setHtml('out-preview-tbl',buildTable(r.preview||[]));
-    show('out-results'); toast('Outliers treated ✓','ok');
-  }catch(e){toast(`Outliers: ${e.message}`,'err');}
-  finally{hide('out-loader');}
-}
-
-async function runPrepare(){
-  if(!S.token) return;
   show('prep-loader'); hide('prep-results');
-  const windows=(document.getElementById('prep-windows').value||'7,14,28').split(',').map(v=>parseInt(v.trim())).filter(v=>!isNaN(v));
-  const tr=parseInt(document.getElementById('train-ratio').value)/100;
-  const vr=parseInt(document.getElementById('val-ratio').value)/100;
-  const fmt=document.querySelector('input[name="out-fmt"]:checked')?.value||'csv';
+  const btn=document.getElementById('run-forecast-prep-btn');
+  if(btn) btn.disabled=true;
   try{
-    const r=await api('/api/prepare',{token:S.token,transform:document.getElementById('prep-transform').value,scale_method:document.getElementById('prep-scale').value,rolling_windows:windows,add_calendar:document.getElementById('prep-calendar').checked,train_ratio:tr,val_ratio:vr,horizon:parseInt(document.getElementById('prep-horizon').value)||1,output_format:fmt});
-    S.downloadToken=r.download_token; S.downloadExt=r.ext;
-    setHtml('prep-stats-row',[statCard(r.n_rows.toLocaleString(),'Rows'),statCard(r.n_features,'Features'),statCard(r.series_summaries.length,'Series'),statCard(r.ext.toUpperCase(),'Format','','var(--a6)')].join(''));
-    const recRows=r.series_summaries.map(s=>({'Series':s.series,'Role':'🎯 Dependent','Model':s.model_type,'Class':s.intermittency,'Exog':s.has_exogenous?(s.n_indep+' indep, '+s.n_events+' events'):'none','Ft':fmtNum(s.Ft,3),'Fs':fmtNum(s.Fs,3),'Rows':s.n_rows}));
-    setHtml('model-recs-table',buildTable(recRows));
-    setHtml('prep-col-list',`<strong style="color:var(--tx)">Columns (${r.columns.length}):</strong> `+r.columns.slice(0,20).map(c=>{const isMod=c==='model_type_recommendation',isSp=c==='split',isTs=c==='timestamp'||c==='date';const cl=isMod?'tag-model':isSp?'tag-train':isTs?'tag-ts':'';return cl?`<span class="td-tag ${cl}" style="margin:2px">${c}</span>`:`<span style="margin:0 3px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)">${c}</span>`;}).join('')+(r.columns.length>20?`<span style="color:var(--tx3)"> +${r.columns.length-20} more</span>`:''));
-    setHtml('prep-preview-tbl',buildTable(r.preview||[],r.columns.slice(0,16)));
-    setHtml('download-info',`<strong style="color:var(--tx)">${r.n_rows.toLocaleString()}</strong> rows · <strong style="color:var(--tx)">${r.n_features}</strong> features · <strong style="color:var(--tx)">${r.ext.toUpperCase()}</strong>`);
-    show('prep-results'); toast('Dataset prepared ✓','ok');
-  }catch(e){toast(`Prepare: ${e.message}`,'err');}
-  finally{hide('prep-loader');}
+    const r=await api('/api/forecast-prepare',{
+      token:S.token,
+      mode:S.prepMode,
+      dep_col:depCol,
+      node_path:nodePath,
+      transform:document.getElementById('prep-transform')?.value||'auto',
+      scale_method:document.getElementById('prep-scale')?.value||'minmax',
+      interval_mode:document.getElementById('prep-interval-mode')?.value||'session',
+      target_freq:document.getElementById('prep-target-freq')?.value||null,
+      quantity_type:document.getElementById('prep-qty-type')?.value||'flow',
+      accumulation_method:document.getElementById('prep-accum-method')?.value||'auto',
+      apply_missing_treatment:document.getElementById('prep-apply-missing')?.checked??true,
+      missing_method:document.getElementById('prep-missing-method')?.value||'auto',
+      missing_period:parseInt(document.getElementById('prep-missing-period')?.value||'7',10),
+      missing_zero_as_missing:document.getElementById('prep-zero-missing')?.checked??false,
+      apply_outlier_treatment:document.getElementById('prep-apply-outlier')?.checked??true,
+      outlier_methods:outlierMethods,
+      outlier_treatment:document.getElementById('prep-outlier-treatment')?.value||'cap',
+      rolling_windows:windows,
+      add_calendar:document.getElementById('prep-calendar')?.checked??true,
+      train_ratio:parseFloat(document.getElementById('prep-train-ratio')?.value||'0.70'),
+      val_ratio:parseFloat(document.getElementById('prep-val-ratio')?.value||'0.15'),
+      horizon:parseInt(document.getElementById('prep-horizon')?.value||'13',10),
+      n_holdout:parseInt(document.getElementById('prep-holdout')?.value||'0',10),
+      output_format:document.querySelector('input[name="prep-out-fmt"]:checked')?.value||'excel',
+      allow_negative_forecast:document.getElementById('prep-neg-allowed')?.checked??false,
+    });
+    renderForecastPrepResults(r);
+    show('prep-results');
+    toast('Forecast preparation complete','ok');
+  }catch(e){
+    toast(`Forecast prep failed: ${e.message}`,'err');
+  }finally{
+    hide('prep-loader');
+    if(btn) btn.disabled=false;
+  }
 }
 
-function downloadData(){
-  if(!S.downloadToken){toast('No prepared data','err');return;}
-  window.location.href=`${API}/api/download/${S.downloadToken}?ext=${S.downloadExt}`;
-  toast('Download started ✓','ok');
+function renderForecastPrepResults(r){
+  const sp=r.series_profile||{};
+  const split=r.split_counts||{};
+  const splitsTxt=Object.entries(split).map(([k,v])=>`${k}:${v}`).join(' | ');
+  setHtml('prep-stats-row',[
+    statCard(sp.n_total||0,'Observations'),
+    statCard(sp.n_features||0,'Features'),
+    statCard(sp.freq||'—','Frequency','','var(--a6)'),
+    statCard(splitsTxt||'n/a','Splits','','var(--tx)')
+  ].join(''));
+
+  renderTimelineChart(r.timeline||{});
+  renderModelParamsGrid(r.model_params||{});
+  const cmp=(r.model_comparison||[]).map(x=>({
+    model:x.model||'—',
+    mape:x.mape==null?'—':x.mape,
+    rmse:x.rmse==null?'—':x.rmse,
+    mae:x.mae==null?'—':x.mae,
+    status:x.status||'—'
+  }));
+  setHtml('prep-model-best',`Best model: <strong style="color:var(--a1)">${r.best_model||'—'}</strong> (selection by lowest MAPE)`);
+  setHtml('prep-model-compare',buildTable(cmp,['model','mape','rmse','mae','status']));
+  setHtml('prep-feature-preview',buildTable(r.feature_preview||[]));
+  setHtml('prep-future-preview',buildTable(r.future_preview||[]));
+  S.forecastDownloadToken=r.download_token||null;
+  S.forecastDownloadExt=r.download_ext||'xlsx';
+  setHtml('prep-export-info',`Ready: ${(S.forecastDownloadExt||'').toUpperCase()} export`);
+  setHtml('prep-report',(r.report||'No report generated.').toString());
+}
+
+function renderTimelineChart(timeline){
+  const labels=timeline.labels||[];
+  const train=timeline.train||[];
+  const validation=timeline.validation||[];
+  const test=timeline.test||[];
+  const holdout=timeline.holdout||[];
+  const modelFc=timeline.model_forecast||[];
+  const futFc=timeline.future_forecast||[];
+  const futLo=timeline.future_lower_95||[];
+  const futHi=timeline.future_upper_95||[];
+  const obs=timeline.observed||[];
+  const holdoutStart=timeline.holdout_start||null;
+  const horizonStart=timeline.horizon_start||null;
+
+  const nums=[...obs,...modelFc,...futLo,...futHi].filter(v=>typeof v==='number' && !isNaN(v));
+  const ymin=nums.length?Math.min(...nums):0;
+  const ymax=nums.length?Math.max(...nums):1;
+
+  destroyChart('prep-timeline-chart');
+  const ctx=document.getElementById('prep-timeline-chart');
+  if(!ctx) return;
+  S.charts['prep-timeline-chart']=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Train',data:train,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
+        {label:'Validation',data:validation,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
+        {label:'Test',data:test,borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
+        {label:'Holdout (actual)',data:holdout,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',pointRadius:2,borderWidth:2,tension:.2,fill:false},
+        {label:'Model Forecast',data:modelFc,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.08)',pointRadius:0,borderWidth:1.5,borderDash:[8,5],tension:.2,fill:false},
+        {label:'95% Lower',data:futLo,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:false},
+        {label:'95% Upper',data:futHi,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:'-1',backgroundColor:'rgba(139,92,246,.12)'},
+        {label:'Future Forecast',data:futFc,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.08)',pointRadius:0,borderWidth:2.5,tension:.2,fill:false},
+        ...(holdoutStart ? [{
+          label:'Holdout start',
+          data:[{x:holdoutStart,y:ymin},{x:holdoutStart,y:ymax}],
+          parsing:false,
+          borderColor:'rgba(239,68,68,.75)',
+          pointRadius:0,
+          borderWidth:1,
+          borderDash:[3,3],
+          showLine:true
+        }] : []),
+        ...(horizonStart ? [{
+          label:'Horizon start',
+          data:[{x:horizonStart,y:ymin},{x:horizonStart,y:ymax}],
+          parsing:false,
+          borderColor:'rgba(139,92,246,.9)',
+          pointRadius:0,
+          borderWidth:1.3,
+          borderDash:[2,2],
+          showLine:true
+        }] : []),
+      ]
+    },
+    options:{
+      responsive:true,
+      animation:{duration:350},
+      plugins:{
+        legend:{display:true,labels:{color:'#8faec8',boxWidth:12,font:{size:11}}},
+        tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(12,16,25,.9)',titleColor:'#e8f0fe',bodyColor:'#8faec8',borderColor:'rgba(59,130,246,.3)',borderWidth:1}
+      },
+      scales:{
+        x:{ticks:{color:'#3d5a7a',maxTicksLimit:10,font:{family:'IBM Plex Mono',size:10}},grid:{color:'rgba(31,45,66,.5)'}},
+        y:{ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}},grid:{color:'rgba(31,45,66,.5)'}}
+      }
+    }
+  });
+
+  const metaParts=[];
+  if(holdoutStart) metaParts.push(`Holdout start: ${holdoutStart}`);
+  if(horizonStart) metaParts.push(`Horizon start: ${horizonStart}`);
+  if(timeline.horizon_n!=null) metaParts.push(`Horizon periods: ${timeline.horizon_n}`);
+  if(timeline.confidence_level!=null) metaParts.push(`CI: ${Math.round(timeline.confidence_level*100)}%`);
+  setHtml('prep-timeline-meta',metaParts.join(' · '));
+}
+
+function renderModelParamsGrid(params){
+  const flat=[];
+  const walk=(obj,prefix='')=>{
+    Object.entries(obj||{}).forEach(([k,v])=>{
+      const key=prefix?`${prefix}.${k}`:k;
+      if(v&&typeof v==='object'&&!Array.isArray(v)) walk(v,key);
+      else flat.push({key,val:Array.isArray(v)?v.join(', '):String(v)});
+    });
+  };
+  walk(params);
+  const html=(flat.length?flat:[{key:'model',val:'n/a'}]).map(item=>`
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px">
+      <div style="font-size:10px;color:var(--tx3);font-family:'IBM Plex Mono',monospace">${item.key}</div>
+      <div style="font-size:12px;color:var(--tx);margin-top:3px;word-break:break-word">${item.val}</div>
+    </div>
+  `).join('');
+  setHtml('prep-model-params',html);
+}
+
+function downloadForecastPrep(){
+  if(!S.forecastDownloadToken){toast('No forecast prep output available yet','err');return;}
+  const ext=S.forecastDownloadExt||'xlsx';
+  window.location.href=`${API}/api/download/${S.forecastDownloadToken}?ext=${ext}`;
+  toast('Download started','ok');
 }
 
 
@@ -2026,6 +2348,583 @@ function renderCCFCard(col, cd, r) {
 // INIT
 // ════════════════════════════════════════════════════════════
 checkApiStatus();
+
+// TAB 5 — LEVEL STABILITY ANALYSIS
+// ════════════════════════════════════════════════════════════
+
+const STAB = {
+  interval: 'W',
+  intervalLabel: 'Week',
+  levelCol: null,
+  parentPath: {},
+  lastResult: null,
+  visibleSeries: new Set(),
+  showEnvelope: false,
+  PALETTE: [
+    '#3b82f6','#f97316','#10b981','#8b5cf6','#ef4444','#06b6d4',
+    '#f59e0b','#ec4899','#84cc16','#14b8a6','#a855f7','#fb923c',
+    '#22d3ee','#4ade80','#f472b6','#facc15','#38bdf8','#fb7185',
+    '#a3e635','#34d399','#c084fc','#fbbf24','#60a5fa','#f87171',
+  ],
+};
+
+function initStabilityTab() {
+  if (!S.token) { show('stab-no-data'); hide('stab-ready'); return; }
+  hide('stab-no-data'); show('stab-ready');
+
+  // Populate level selector — all hierarchy levels
+  const levelSel = document.getElementById('stab-level-sel');
+  if (levelSel) {
+    const levels = S.hierCols && S.hierCols.length ? S.hierCols : [];
+    levelSel.innerHTML = levels.map(l => `<option value="${l}">${l}</option>`).join('');
+    if (!levels.length) {
+      levelSel.innerHTML = '<option value="">No hierarchy columns</option>';
+    }
+  }
+
+  // Populate value column selector
+  const valSel = document.getElementById('stab-val-col');
+  if (valSel) {
+    const cols = (S.depCols||[]).length ? S.depCols : (S.valueCols||[]);
+    valSel.innerHTML = cols.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  onStabLevelChange();
+}
+
+function onStabLevelChange() {
+  const levelSel = document.getElementById('stab-level-sel');
+  STAB.levelCol = levelSel?.value || null;
+  buildStabParentFilters();
+}
+
+function buildStabParentFilters() {
+  const container = document.getElementById('stab-parent-filters');
+  if (!container) return;
+  container.innerHTML = '';
+  STAB.parentPath = {};
+  if (!STAB.levelCol || !S.hierCols) return;
+
+  // Show filters for all hierarchy levels ABOVE the selected level
+  const idx = S.hierCols.indexOf(STAB.levelCol);
+  const parentLevels = S.hierCols.slice(0, idx);
+
+  parentLevels.forEach((lvl, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'form-group';
+    wrap.style.cssText = 'flex:0 0 150px;margin:0';
+    wrap.innerHTML = `<label class="form-label">${lvl} (filter)</label>`;
+    const sel = document.createElement('select');
+    sel.id = `stab-parent-${i}`;
+    sel.className = 'form-control';
+    sel.style.cssText = 'padding:7px 10px;font-size:12px';
+    sel.innerHTML = '<option value="">All</option>';
+    // populate from level_values
+    const vals = S.hierLevelValues?.[lvl] || [];
+    vals.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', () => syncStabParentPath());
+    wrap.appendChild(sel);
+    container.appendChild(wrap);
+  });
+}
+
+function syncStabParentPath() {
+  STAB.parentPath = {};
+  const idx = S.hierCols?.indexOf(STAB.levelCol) ?? -1;
+  const parentLevels = S.hierCols?.slice(0, idx) || [];
+  parentLevels.forEach((lvl, i) => {
+    const sel = document.getElementById(`stab-parent-${i}`);
+    if (sel && sel.value) STAB.parentPath[lvl] = sel.value;
+  });
+}
+
+function selectStabInterval(interval, label) {
+  STAB.interval = interval;
+  STAB.intervalLabel = label;
+  document.querySelectorAll('.ipill').forEach(p => {
+    p.classList.toggle('active', p.dataset.int === interval);
+  });
+}
+
+async function runStabilityAnalysis() {
+  if (!S.token || !STAB.levelCol) { toast('Select a hierarchy level first', 'err'); return; }
+  syncStabParentPath();
+  show('stab-loader'); hide('stab-results');
+  document.getElementById('stab-loader-msg').textContent =
+    `Computing ${STAB.intervalLabel} stability for level "${STAB.levelCol}"…`;
+
+  const valCol = document.getElementById('stab-val-col')?.value;
+  const agg    = document.getElementById('stab-agg')?.value || 'sum';
+
+  try {
+    const r = await api('/api/level-stability', {
+      token:       S.token,
+      level_col:   STAB.levelCol,
+      parent_path: STAB.parentPath,
+      value_col:   valCol,
+      agg_method:  agg,
+      interval:    STAB.interval,
+      max_series:  30,
+    });
+    STAB.lastResult = r;
+    STAB.visibleSeries = new Set(r.series_names);
+    STAB.showEnvelope = false;
+    renderStabilityResults(r);
+    show('stab-results');
+    toast(`Stability analysis complete — ${r.n_series} series ✓`, 'ok');
+  } catch (e) {
+    toast(`Stability analysis failed: ${e.message}`, 'err');
+  } finally {
+    hide('stab-loader');
+  }
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+
+function renderStabilityResults(r) {
+  // Context banner
+  const pathStr = Object.entries(r.parent_path||{}).map(([k,v])=>`${k}=${v}`).join(', ');
+  setHtml('stab-context-banner', `
+    <div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:10px;padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span style="font-size:22px">🌲</span>
+      <div style="flex:1">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--a4)">
+          Level: <strong style="color:var(--tx)">${r.level_col}</strong>
+          &nbsp;·&nbsp; ${r.n_series} series
+          &nbsp;·&nbsp; Interval: <strong style="color:var(--a6)">${r.interval_label}</strong>
+          &nbsp;·&nbsp; Value: <strong style="color:var(--a3)">${r.val_col}</strong>
+        </div>
+        ${pathStr ? `<div style="font-size:12px;color:var(--tx2);margin-top:3px">Filtered by: ${pathStr}</div>` : ''}
+      </div>
+      <span class="chip chip-violet">${r.n_series} series</span>
+      <span class="chip chip-blue">${r.date_labels?.length||0} periods</span>
+    </div>`);
+
+  buildSeriesLegend(r);
+  renderMainSuperimposedChart(r);
+  renderEnvelopeCharts(r);
+  renderSeasonalCharts(r);
+  renderYoYHeatmap(r);
+  renderStabilityTable(r);
+}
+
+// ── LEGEND ─────────────────────────────────────────────────────────────────
+function buildSeriesLegend(r) {
+  const html = r.series_names.map((name, i) => {
+    const color = STAB.PALETTE[i % STAB.PALETTE.length];
+    return `<div class="series-legend-item" id="leg-${CSS.escape(name)}" onclick="toggleSeries('${name}')" title="${name}">
+      <div class="legend-swatch" style="background:${color}"></div>
+      <span style="color:var(--tx)">${name}</span>
+    </div>`;
+  }).join('');
+  setHtml('stab-series-legend', html);
+}
+
+function toggleSeries(name) {
+  if (STAB.visibleSeries.has(name)) STAB.visibleSeries.delete(name);
+  else STAB.visibleSeries.add(name);
+  document.querySelectorAll('.series-legend-item').forEach(el => {
+    const n = el.id.replace('leg-','');
+    el.classList.toggle('dimmed', !STAB.visibleSeries.has(n));
+  });
+  if (STAB.lastResult) renderMainSuperimposedChart(STAB.lastResult);
+}
+
+function toggleAllSeries(show) {
+  const r = STAB.lastResult;
+  if (!r) return;
+  STAB.visibleSeries = show ? new Set(r.series_names) : new Set();
+  document.querySelectorAll('.series-legend-item').forEach(el => el.classList.toggle('dimmed', !show));
+  renderMainSuperimposedChart(r);
+}
+
+function toggleEnvelope() {
+  STAB.showEnvelope = !STAB.showEnvelope;
+  const btn = document.getElementById('env-toggle-btn');
+  if (btn) btn.textContent = STAB.showEnvelope ? 'Hide Envelope' : 'Show Envelope';
+  if (STAB.lastResult) renderMainSuperimposedChart(STAB.lastResult);
+}
+
+// ── MAIN SUPERIMPOSED CHART ────────────────────────────────────────────────
+function renderMainSuperimposedChart(r) {
+  destroyChart('stab-main-chart');
+  const ctx = document.getElementById('stab-main-chart');
+  if (!ctx) return;
+
+  const labels = r.date_labels || [];
+  const datasets = [];
+
+  // Individual series datasets
+  r.series_names.forEach((name, i) => {
+    const color = STAB.PALETTE[i % STAB.PALETTE.length];
+    const visible = STAB.visibleSeries.has(name);
+    datasets.push({
+      label: name,
+      data: r.series_data[name] || [],
+      borderColor: color,
+      backgroundColor: 'transparent',
+      borderWidth: visible ? 1.5 : 0,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.3,
+      hidden: !visible,
+    });
+  });
+
+  // Envelope datasets (mean ± std)
+  if (STAB.showEnvelope) {
+    const env = r.envelope || {};
+    // Upper band (mean + std)
+    const upper = (env.mean||[]).map((m,i) => m!=null && env.std[i]!=null ? round4(m + env.std[i]) : null);
+    const lower = (env.mean||[]).map((m,i) => m!=null && env.std[i]!=null ? round4(m - env.std[i]) : null);
+    datasets.push({
+      label: 'Mean+Std',
+      data: upper,
+      borderColor: 'rgba(245,158,11,0.6)',
+      backgroundColor: 'rgba(245,158,11,0.08)',
+      borderWidth: 1.5,
+      borderDash: [4,3],
+      pointRadius: 0,
+      tension: 0.3,
+      fill: '+1',
+    });
+    datasets.push({
+      label: 'Mean',
+      data: env.mean,
+      borderColor: 'rgba(245,158,11,0.9)',
+      backgroundColor: 'transparent',
+      borderWidth: 2.5,
+      pointRadius: 0,
+      tension: 0.3,
+    });
+    datasets.push({
+      label: 'Mean-Std',
+      data: lower,
+      borderColor: 'rgba(245,158,11,0.6)',
+      backgroundColor: 'rgba(245,158,11,0.08)',
+      borderWidth: 1.5,
+      borderDash: [4,3],
+      pointRadius: 0,
+      tension: 0.3,
+      fill: false,
+    });
+  }
+
+  S.charts['stab-main-chart'] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      animation: { duration: 350 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(12,16,25,0.95)',
+          titleColor: '#e8f0fe', bodyColor: '#8faec8',
+          borderColor: 'rgba(59,130,246,0.3)', borderWidth: 1,
+          callbacks: {
+            label: ctx2 => {
+              const v = ctx2.raw;
+              if (v == null) return null;
+              return ` ${ctx2.dataset.label}: ${typeof v === 'number' ? v.toFixed(2) : v}`;
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#3d5a7a', maxTicksLimit: 14, font: { family: 'IBM Plex Mono', size: 10 } },
+          grid: { color: 'rgba(31,45,66,0.5)' },
+        },
+        y: {
+          ticks: { color: '#3d5a7a', font: { family: 'IBM Plex Mono', size: 10 } },
+          grid: { color: 'rgba(31,45,66,0.5)' },
+        },
+      },
+    },
+  });
+}
+
+function round4(v) { return Math.round(v * 10000) / 10000; }
+
+// ── ENVELOPE CHARTS ─────────────────────────────────────────────────────────
+function renderEnvelopeCharts(r) {
+  const env = r.envelope || {};
+  const labels = r.date_labels || [];
+
+  // Mean ± Std band
+  destroyChart('stab-envelope-chart');
+  const ctx1 = document.getElementById('stab-envelope-chart');
+  if (ctx1) {
+    const upper = (env.mean||[]).map((m,i) => m!=null && env.std[i]!=null ? round4(m+env.std[i]) : null);
+    const lower = (env.mean||[]).map((m,i) => m!=null && env.std[i]!=null ? round4(m-env.std[i]) : null);
+    S.charts['stab-envelope-chart'] = new Chart(ctx1, {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Max',      data: env.max, borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.05)', borderWidth:1, pointRadius:0, tension:0.3, fill:'+3' },
+        { label: 'Mean+Std', data: upper,   borderColor: 'rgba(245,158,11,0.7)', backgroundColor: 'rgba(245,158,11,0.1)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, tension:0.3, fill:'+1' },
+        { label: 'Mean',     data: env.mean, borderColor: '#f59e0b', backgroundColor:'transparent', borderWidth:2.5, pointRadius:0, tension:0.3 },
+        { label: 'Mean-Std', data: lower,   borderColor: 'rgba(245,158,11,0.7)', backgroundColor: 'rgba(245,158,11,0.1)', borderWidth:1.5, borderDash:[4,3], pointRadius:0, tension:0.3, fill:false },
+        { label: 'Min',      data: env.min, borderColor: 'rgba(59,130,246,0.4)', backgroundColor: 'rgba(59,130,246,0.05)', borderWidth:1, pointRadius:0, tension:0.3, fill:false },
+      ]},
+      options: _compactChartOpts(),
+    });
+  }
+
+  // CV over time
+  destroyChart('stab-cv-chart');
+  const ctx2 = document.getElementById('stab-cv-chart');
+  if (ctx2) {
+    S.charts['stab-cv-chart'] = new Chart(ctx2, {
+      type: 'line',
+      data: { labels, datasets: [{
+        label: 'Cross-series CV',
+        data: env.cv,
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139,92,246,0.1)',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: true,
+      }]},
+      options: {
+        ..._compactChartOpts(),
+        plugins: {
+          ..._compactChartOpts().plugins,
+          annotation: {},
+        },
+      },
+    });
+  }
+}
+
+function _compactChartOpts() {
+  return {
+    responsive: true,
+    animation: { duration: 300 },
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(12,16,25,.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8', borderColor:'rgba(59,130,246,.3)', borderWidth:1 },
+    },
+    scales: {
+      x: { ticks: { color:'#3d5a7a', maxTicksLimit:10, font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,.5)'} },
+      y: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,.5)'} },
+    },
+  };
+}
+
+// ── SEASONAL CHARTS ─────────────────────────────────────────────────────────
+function renderSeasonalCharts(r) {
+  const labels = r.combined_season_labels || [];
+  const avgVals = labels.map(l => r.combined_season_avg?.[l] ?? null);
+  const cvVals  = labels.map(l => r.combined_season_cv?.[l]  ?? null);
+
+  // Season average bar chart
+  destroyChart('stab-season-chart');
+  const ctx1 = document.getElementById('stab-season-chart');
+  if (ctx1 && labels.length) {
+    // Colour bars by relative height (heat-like: blue low → amber mid → red high)
+    const maxV = Math.max(...avgVals.filter(v=>v!=null));
+    const barColors = avgVals.map(v => {
+      if (v == null) return 'transparent';
+      const frac = v / (maxV + 1e-9);
+      if (frac < 0.33)  return 'rgba(59,130,246,0.7)';
+      if (frac < 0.67)  return 'rgba(245,158,11,0.7)';
+      return 'rgba(239,68,68,0.75)';
+    });
+    S.charts['stab-season-chart'] = new Chart(ctx1, {
+      type: 'bar',
+      data: { labels, datasets: [{
+        label: 'Avg value',
+        data: avgVals,
+        backgroundColor: barColors,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]},
+      options: {
+        responsive: true,
+        animation: { duration: 350 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(12,16,25,.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8', borderColor:'rgba(245,158,11,.3)', borderWidth:1 },
+        },
+        scales: {
+          x: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{display:false} },
+          y: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,.5)'} },
+        },
+      },
+    });
+  }
+
+  // Season CV bar chart
+  destroyChart('stab-season-cv-chart');
+  const ctx2 = document.getElementById('stab-season-cv-chart');
+  if (ctx2 && labels.length) {
+    const cvColors = cvVals.map(v => {
+      if (v == null) return 'transparent';
+      if (v < 0.2)  return 'rgba(16,185,129,0.7)';
+      if (v < 0.5)  return 'rgba(245,158,11,0.7)';
+      return 'rgba(239,68,68,0.75)';
+    });
+    S.charts['stab-season-cv-chart'] = new Chart(ctx2, {
+      type: 'bar',
+      data: { labels, datasets: [{
+        label: 'Cross-series CV',
+        data: cvVals,
+        backgroundColor: cvColors,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]},
+      options: {
+        responsive: true,
+        animation: { duration: 350 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(12,16,25,.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8',
+            borderColor:'rgba(139,92,246,.3)', borderWidth:1,
+            callbacks: { label: ctx2 => ` CV=${(ctx2.raw||0).toFixed(3)} (${cv2label(ctx2.raw)})` }
+          },
+        },
+        scales: {
+          x: { ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}}, grid:{display:false} },
+          y: { ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}}, grid:{color:'rgba(31,45,66,.5)'}, suggestedMax: 1 },
+        },
+      },
+    });
+  }
+}
+
+function cv2label(v) { return v < 0.2 ? 'stable' : v < 0.5 ? 'moderate' : 'volatile'; }
+
+// ── YoY HEATMAP ─────────────────────────────────────────────────────────────
+function renderYoYHeatmap(r) {
+  const yoy = r.yoy_matrix || {};
+  const years = r.yoy_years || [];
+  const names = r.series_names || [];
+  if (!names.length || !years.length) {
+    setHtml('stab-yoy-heatmap', '<div style="color:var(--tx3);font-size:13px;padding:8px">Insufficient data for year-over-year analysis.</div>');
+    return;
+  }
+
+  // Compute global max for normalisation
+  let allVals = [];
+  names.forEach(n => years.forEach(y => {
+    const v = yoy[n]?.[y];
+    if (v != null) allVals.push(v);
+  }));
+  const maxV = Math.max(...allVals) || 1;
+  const minV = Math.min(...allVals) || 0;
+  const range = maxV - minV || 1;
+
+  let table = `<table style="border-collapse:separate;border-spacing:3px">`;
+  // Header
+  table += `<tr><th style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--tx3);padding:4px 10px;text-align:left;min-width:120px">Series</th>`;
+  years.forEach(y => table += `<th style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--tx2);padding:4px 8px;text-align:center">${y}</th>`);
+  table += `<th style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--tx3);padding:4px 8px;text-align:center">Stability</th></tr>`;
+
+  // Series rows
+  names.forEach((name, si) => {
+    const color = STAB.PALETTE[si % STAB.PALETTE.length];
+    table += `<tr>`;
+    table += `<td style="padding:3px 10px">
+      <div style="display:flex;align-items:center;gap:7px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx)">${name}</span>
+      </div></td>`;
+    const rowVals = years.map(y => yoy[name]?.[y] ?? null);
+    const rowMax  = Math.max(...rowVals.filter(v=>v!=null));
+    const rowMin  = Math.min(...rowVals.filter(v=>v!=null));
+    const rowRange = rowMax - rowMin || 1;
+
+    years.forEach(y => {
+      const v = yoy[name]?.[y];
+      if (v == null) { table += `<td><div class="heatmap-cell" style="background:var(--bg2);color:var(--tx3)">—</div></td>`; return; }
+      // Relative to this series' own range → allows each series to show its relative variation
+      const frac = (v - rowMin) / rowRange;
+      const globalFrac = (v - minV) / range;
+      // Blue-white-red diverging: low=cool, high=warm
+      const r255 = Math.round(59  + frac * (239 - 59));
+      const g255 = Math.round(130 + frac * (68  - 130));
+      const b255 = Math.round(246 + frac * (68  - 246));
+      const bg = `rgba(${r255},${g255},${b255},0.6)`;
+      const textCol = frac > 0.6 ? '#fff' : 'var(--tx)';
+      table += `<td title="${name} · ${y}: ${v.toLocaleString()}"><div class="heatmap-cell" style="background:${bg};color:${textCol}">${formatShort(v)}</div></td>`;
+    });
+
+    // Stability badge
+    const allRowVals = rowVals.filter(v=>v!=null);
+    let stabLabel = '—';
+    if (allRowVals.length > 1) {
+      const rowCV = (Math.std ? Math.std(allRowVals) : stdDev(allRowVals)) / (Math.abs(rowVals.reduce((a,b)=>a+b,0)/allRowVals.length) + 1e-9);
+      stabLabel = rowCV < 0.1 ? '<span class="stab-badge stab-stable">stable</span>' :
+                  rowCV < 0.3 ? '<span class="stab-badge stab-moderate">moderate</span>' :
+                                 '<span class="stab-badge stab-volatile">volatile</span>';
+    }
+    table += `<td style="text-align:center">${stabLabel}</td>`;
+    table += `</tr>`;
+  });
+  table += '</table>';
+  // Colour legend
+  table += `<div style="margin-top:10px;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--tx3)">
+    <span>Row-relative colour scale:</span>
+    <div style="display:flex;gap:0;border-radius:4px;overflow:hidden;height:12px;width:140px">
+      <div style="flex:1;background:rgba(59,130,246,0.6)"></div>
+      <div style="flex:1;background:rgba(149,99,157,0.6)"></div>
+      <div style="flex:1;background:rgba(239,68,68,0.6)"></div>
+    </div>
+    <span>Low → High (within each series)</span>
+  </div>`;
+
+  setHtml('stab-yoy-heatmap', table);
+}
+
+function formatShort(v) {
+  if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+  if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+  return v.toFixed(0);
+}
+function stdDev(arr) {
+  const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+  return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length);
+}
+
+// ── STABILITY TABLE ─────────────────────────────────────────────────────────
+function renderStabilityTable(r) {
+  const rows = (r.series_names||[]).map((name, i) => {
+    const st = r.stability_stats?.[name] || {};
+    const stLabel = st.stability||'—';
+    const badgeCls = stLabel==='stable'?'stab-stable':stLabel==='moderate'?'stab-moderate':'stab-volatile';
+    return {
+      'Series': name,
+      'Mean':   fmtNum(st.mean, 2),
+      'Std':    fmtNum(st.std,  2),
+      'CV':     fmtNum(st.cv,   4),
+      'Min':    fmtNum(st.min,  2),
+      'Max':    fmtNum(st.max,  2),
+      'Range':  fmtNum(st.range,2),
+      'N obs':  st.n_obs||'—',
+      'Avg YoY%': st.avg_yoy_pct_change != null ? fmtNum(st.avg_yoy_pct_change,2)+'%' : '—',
+      'Stability': `<span class="stab-badge ${badgeCls}">${stLabel}</span>`,
+    };
+  });
+
+  // Custom table render to allow HTML in cells
+  if (!rows.length) { setHtml('stab-stats-table','<div style="padding:10px;color:var(--tx3)">No data</div>'); return; }
+  const headers = Object.keys(rows[0]);
+  let h = `<table><thead><tr>${headers.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(row => {
+    h += `<tr>${headers.map(c=>`<td>${row[c]??'—'}</td>`).join('')}</tr>`;
+  });
+  h += '</tbody></table>';
+  setHtml('stab-stats-table', h);
+}
+
 </script>
 </body>
 </html>
