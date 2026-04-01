@@ -1102,6 +1102,7 @@ const S = {
   forecastDownloadToken: null, forecastDownloadExt: 'xlsx',
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
+  hierTreeDeferred: false, hierChildCache: {},
   currentNodePath: {},   // {region:"North", country:"UK", ...}
   analyzeMode: 'single', // 'single' | 'hierarchy'
   charts: {},
@@ -1353,26 +1354,28 @@ function setAnalyzeMode(mode) {
 // ─── HIERARCHY TREE LOADING ───────────────────────────────
 async function loadHierarchyTree() {
   if(!S.token||!S.isHierarchy) return;
-  if(S.hierTree) { renderTree(); return; }  // already loaded
+  if(S.hierTree || S.hierTreeDeferred) { renderTree(); return; }  // already loaded
   try {
     const r=await api('/api/hierarchy-tree',{token:S.token});
     S.hierTree=r.tree;
     S.hierLevels=r.levels;
     S.hierLevelValues=r.level_values;
-    document.getElementById('tree-total-leaves').textContent=`${r.total_leaves} leaves`;
-    renderTree();
+    S.hierTreeDeferred=!!r.tree_deferred;
+    S.hierChildCache={};
+    document.getElementById('tree-total-leaves').textContent = r.total_leaves!=null ? `${r.total_leaves} leaves` : 'large dataset';
+    await renderTree();
     toast('Hierarchy tree loaded ✓','ok');
   } catch(e){toast(`Tree load failed: ${e.message}`,'err');}
 }
 
 // ─── CASCADING DROPDOWNS ──────────────────────────────────
-function renderTree() {
-  buildCascadeDropdowns(); // in sidebar
-  buildCascadeDropdownsInline(); // in analyzer bar
+async function renderTree() {
+  await buildCascadeDropdowns(); // in sidebar
+  await buildCascadeDropdownsInline(); // in analyzer bar
   buildVisualTree();
 }
 
-function buildCascadeDropdowns() {
+async function buildCascadeDropdowns() {
   const container=document.getElementById('tree-cascade-selects');
   if(!container) return;
   container.innerHTML='';
@@ -1386,14 +1389,15 @@ function buildCascadeDropdowns() {
     sel.id=`cs-${idx}`;
     sel.className='cascade-select';
     if(idx>0) sel.disabled=true;
-    populateCascadeSelect(sel, idx, {});
     sel.addEventListener('change',()=>onCascadeChange(idx));
     row.appendChild(badge); row.appendChild(sel);
     container.appendChild(row);
   });
+  const firstSel=document.getElementById('cs-0');
+  if(firstSel) await populateCascadeSelect(firstSel, 0, {});
 }
 
-function buildCascadeDropdownsInline() {
+async function buildCascadeDropdownsInline() {
   // dropdowns shown in the analyzer controls bar
   const container=document.getElementById('cascade-dropdowns');
   if(!container) return;
@@ -1407,20 +1411,51 @@ function buildCascadeDropdownsInline() {
     sel.className='form-control';
     sel.style.fontSize='12px';
     if(idx>0) sel.disabled=true;
-    populateCascadeSelectInline(sel,idx,{});
     sel.addEventListener('change',()=>onCascadeChangeInline(idx));
     wrap.appendChild(sel);
     container.appendChild(wrap);
   });
+  const firstSel=document.getElementById('ci-0');
+  if(firstSel) await populateCascadeSelectInline(firstSel,0,{});
 }
 
-function populateCascadeSelect(sel, levelIdx, currentPath) {
-  sel.innerHTML='<option value="">— All —</option>';
-  let values=S.hierLevelValues[S.hierLevels[levelIdx]]||[];
-  // filter to children of current path
-  if(levelIdx>0) {
-    values=getChildValues(currentPath,levelIdx);
+function getChildValuesFromTree(path, levelIdx) {
+  let node=S.hierTree;
+  for(let i=0;i<levelIdx;i++){
+    const v=path[S.hierLevels[i]];
+    if(!v||!node||!node[v]) return [];
+    node=node[v];
   }
+  if(typeof node==='object'&&!Array.isArray(node)) return Object.keys(node);
+  return [];
+}
+
+function childCacheKey(path, levelIdx){
+  return `${S.hierLevels[levelIdx] || levelIdx}::${JSON.stringify(path||{})}`;
+}
+
+async function fetchChildValues(path, levelIdx) {
+  if(levelIdx===0) return S.hierLevelValues[S.hierLevels[0]]||[];
+  if(S.hierTree && !S.hierTreeDeferred) return getChildValuesFromTree(path, levelIdx);
+
+  const key=childCacheKey(path, levelIdx);
+  if(S.hierChildCache[key]) return S.hierChildCache[key];
+
+  const r=await api('/api/hierarchy-children',{
+    token:S.token,
+    path,
+    next_level:S.hierLevels[levelIdx],
+    max_values:500
+  });
+  S.hierChildCache[key]=r.values||[];
+  return S.hierChildCache[key];
+}
+
+async function populateCascadeSelect(sel, levelIdx, currentPath) {
+  sel.innerHTML='<option value="">— All —</option>';
+  let values = levelIdx>0
+    ? await fetchChildValues(currentPath, levelIdx)
+    : (S.hierLevelValues[S.hierLevels[levelIdx]]||[]);
   values.forEach(v=>{
     const opt=document.createElement('option');
     opt.value=v; opt.textContent=v;
@@ -1428,28 +1463,18 @@ function populateCascadeSelect(sel, levelIdx, currentPath) {
   });
 }
 
-function populateCascadeSelectInline(sel, levelIdx, currentPath) {
+async function populateCascadeSelectInline(sel, levelIdx, currentPath) {
   sel.innerHTML='<option value="">All</option>';
-  let values=S.hierLevelValues[S.hierLevels[levelIdx]]||[];
-  if(levelIdx>0) values=getChildValues(currentPath,levelIdx);
+  let values = levelIdx>0
+    ? await fetchChildValues(currentPath, levelIdx)
+    : (S.hierLevelValues[S.hierLevels[levelIdx]]||[]);
   values.forEach(v=>{
     const opt=document.createElement('option');
     opt.value=v; opt.textContent=v; sel.appendChild(opt);
   });
 }
 
-function getChildValues(path, levelIdx) {
-  let node=S.hierTree;
-  for(let i=0;i<levelIdx;i++){
-    const v=path[S.hierLevels[i]];
-    if(!v||!node[v]) return [];
-    node=node[v];
-  }
-  if(typeof node==='object'&&!Array.isArray(node)) return Object.keys(node);
-  return [];
-}
-
-function onCascadeChange(changedIdx) {
+async function onCascadeChange(changedIdx) {
   const path={};
   for(let i=0;i<=changedIdx;i++){
     const sel=document.getElementById(`cs-${i}`);
@@ -1460,17 +1485,17 @@ function onCascadeChange(changedIdx) {
     const sel=document.getElementById(`cs-${i}`);
     if(!sel) continue;
     sel.disabled=!path[S.hierLevels[changedIdx]];
-    populateCascadeSelect(sel,i,path);
+    await populateCascadeSelect(sel,i,path);
     sel.value='';
   }
   S.currentNodePath=path;
   updateBreadcrumb(path);
-  syncInlineDropdowns(path);
+  await syncInlineDropdowns(path);
   // also highlight visual tree node
   highlightVisualNode(path);
 }
 
-function onCascadeChangeInline(changedIdx) {
+async function onCascadeChangeInline(changedIdx) {
   const path={};
   for(let i=0;i<=changedIdx;i++){
     const sel=document.getElementById(`ci-${i}`);
@@ -1480,34 +1505,36 @@ function onCascadeChangeInline(changedIdx) {
     const sel=document.getElementById(`ci-${i}`);
     if(!sel) continue;
     sel.disabled=!path[S.hierLevels[changedIdx]];
-    populateCascadeSelectInline(sel,i,path);
+    await populateCascadeSelectInline(sel,i,path);
     sel.value='';
   }
   S.currentNodePath=path;
   updateBreadcrumb(path);
-  syncSidebarDropdowns(path);
+  await syncSidebarDropdowns(path);
 }
 
-function syncInlineDropdowns(path) {
-  S.hierLevels.forEach((lvl,idx)=>{
+async function syncInlineDropdowns(path) {
+  for(let idx=0; idx<S.hierLevels.length; idx++){
+    const lvl=S.hierLevels[idx];
     const sel=document.getElementById(`ci-${idx}`);
-    if(!sel) return;
+    if(!sel) continue;
     const v=path[lvl];
     sel.disabled=idx>0&&!path[S.hierLevels[idx-1]];
-    populateCascadeSelectInline(sel,idx,path);
+    await populateCascadeSelectInline(sel,idx,path);
     if(v) sel.value=v;
-  });
+  }
 }
 
-function syncSidebarDropdowns(path) {
-  S.hierLevels.forEach((lvl,idx)=>{
+async function syncSidebarDropdowns(path) {
+  for(let idx=0; idx<S.hierLevels.length; idx++){
+    const lvl=S.hierLevels[idx];
     const sel=document.getElementById(`cs-${idx}`);
-    if(!sel) return;
+    if(!sel) continue;
     const v=path[lvl];
     sel.disabled=idx>0&&!path[S.hierLevels[idx-1]];
-    populateCascadeSelect(sel,idx,path);
+    await populateCascadeSelect(sel,idx,path);
     if(v) sel.value=v;
-  });
+  }
 }
 
 // ─── BREADCRUMB ───────────────────────────────────────────
