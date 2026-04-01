@@ -46,7 +46,7 @@ from agents.decomposition_agent import DecompositionAgent
 from agents.outlier_detection_agent import OutlierDetectionAgent
 from agents.missing_values_agent import MissingValuesAgent
 from agents.intermittency_agent import IntermittencyAgent
-from agents.data_preparation_agent import DataPreparationAgent
+from agents.forecast_preparation_agent import ForecastPreparationAgent
 
 logger = logging.getLogger("orchestrator")
 
@@ -88,6 +88,7 @@ class Orchestrator:
         scale_method: str = "minmax",
         rolling_windows: Optional[List[int]] = None,
         horizon: int = 1,
+        n_holdout: int = 0,
         period: Optional[int] = None,
         run_intermittency: bool = True,
         **kwargs,
@@ -193,6 +194,7 @@ class Orchestrator:
             scale_method=scale_method,
             rolling_windows=rolling_windows,
             horizon=horizon,
+            n_holdout=n_holdout,
             run_intermittency=run_intermittency,
             pipeline_warnings=pipeline_warnings,
         )
@@ -228,6 +230,7 @@ class Orchestrator:
         scale_method: str,
         rolling_windows: Optional[List[int]],
         horizon: int,
+        n_holdout: int,
         run_intermittency: bool,
         pipeline_warnings: List[str],
     ) -> Dict[str, AgentResult]:
@@ -277,16 +280,17 @@ class Orchestrator:
             if decomp_res.ok:
                 acf_lags = decomp_res.metadata.get("acf_significant_lags")
 
-            prep_res = DataPreparationAgent(self.ctx).execute(
+            prep_res = ForecastPreparationAgent(self.ctx).execute(
                 series=clean_series,
-                target_col=col,
+                dep_col=col,
                 transform=transform,
                 scale_method=scale_method,
                 rolling_windows=rolling_windows,
                 horizon=horizon,
+                n_holdout=n_holdout,
                 acf_lags=acf_lags,
             )
-            col_results[f"data_prep_{col}"] = prep_res
+            col_results[f"forecast_prep_{col}"] = prep_res
 
             with lock:
                 results.update(col_results)

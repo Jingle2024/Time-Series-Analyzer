@@ -303,4 +303,3 @@ def ols_fit(X: np.ndarray, y: np.ndarray) -> OLSResult:
         p_vals = np.ones(k)
         r2 = 0.0
     return OLSResult(beta, p_vals, r2)
-

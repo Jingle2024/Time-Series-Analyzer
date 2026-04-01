@@ -123,6 +123,7 @@ class IngestionAgent(BaseAgent):
         for col in val_cols:
             df[col] = pd.to_numeric(df[col], errors="coerce")
             n_bad = df[col].isna().sum()
+            df[col] = df[col].fillna(0)
             if n_bad:
                 warnings.append(f"Column '{col}': {n_bad} values could not be parsed → NaN")
 
