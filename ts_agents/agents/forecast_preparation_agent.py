@@ -162,6 +162,85 @@ def _suggest_model_params(
             "use_arma_errors": True,
         }
 
+    if "flann" in name or "rvfl" in name:
+        base["flann_family"] = {
+            # Which variant to run by default (can be overridden by the caller)
+            "variant":  (
+                "recurrent_flann" if "recurrent" in name
+                else "rvfl"       if "rvfl"      in name
+                else "flann"
+            ),
+            # Available choices shown in the UI
+            "available_variants": ["flann", "recurrent_flann", "rvfl"],
+            # Basis expansion
+            "basis_family":       "mixed",        # polynomial|trig|chebyshev|legendre|mixed
+            "available_basis":    [
+                "polynomial", "trigonometric", "chebyshev", "legendre", "mixed"
+            ],
+            "expansion_order":    3,              # polynomial degree / trig harmonics
+            "ridge_lambda":       0.01,           # L2 regularisation for output layer
+            "use_exogenous":      has_exog,
+        }
+        base["flann"] = {
+                    "description": (
+                        "Functional Link ANN — non-linear basis expansion of lag/exog "
+                        "inputs, single linear output layer solved by ridge regression. "
+                        "No hidden layer, no back-prop. O(n·D²) training."
+                    ),
+                    "basis_family":    "mixed",
+                    "expansion_order": 3,
+                    "ridge_lambda":    0.01,
+                    "lag_features":    [1, 2, 3],
+                    "rolling_features": [3, 7],
+                    "use_exogenous":   has_exog,
+                    "multi_step":      "iterative",   # recursive prediction for h>1
+                    "recommended_when": (
+                        "small-to-medium n, smooth or erratic series, "
+                        "interpretability matters"
+                    ),
+        }
+
+        base["recurrent_flann"] = {
+            "description": (
+                "FLANN with a recurrent feedback state. The previous R "
+                "predictions are appended to the input vector before basis "
+                "expansion, capturing short-memory dynamics without gradient "
+                "descent. Training uses teacher-forcing."
+            ),
+            "basis_family":     "mixed",
+            "expansion_order":  3,
+            "ridge_lambda":     0.01,
+            "recurrent_depth":  min(3, max(1, period // 4)),  # auto from period
+            "use_exogenous":    has_exog,
+            "multi_step":       "recurrent",
+            "recommended_when": (
+                "series with strong temporal autocorrelation, "
+                "periodic or trending behaviour, medium n"
+            ),
+        }
+        # Hidden-layer size heuristic: roughly 2×input_dim, capped for small n
+        _rvfl_hidden = max(16, min(128, n_obs // 4))
+
+        base["rvfl"] = {
+            "description": (
+                "Random Vector Functional Link. Hidden-layer weights are drawn "
+                "ONCE from a uniform random distribution and FIXED. Only the "
+                "output weights are learned (ridge). Extremely fast; often "
+                "matches deep networks on small-to-medium tabular time-series."
+            ),
+            "n_hidden":        _rvfl_hidden,
+            "activation":      "sigmoid",        # sigmoid | relu | tanh | sin
+            "available_activations": ["sigmoid", "relu", "tanh", "sin"],
+            "ridge_lambda":    0.01,
+            "random_seed":     42,
+            "direct_links":    True,             # original inputs bypass hidden layer
+            "use_exogenous":   has_exog,
+            "multi_step":      "iterative",
+            "recommended_when": (
+                "very small n (<100), need fast training, "
+                "ensemble diversity when combined with FLANN"
+            ),
+        }
     # ── Universal evaluation metrics ─────────────────────────────────────────
     base["evaluation"] = {
         "metrics": ["MAE", "RMSE", "MAPE", "sMAPE", "MASE"],
@@ -569,7 +648,13 @@ class ForecastPreparationAgent(BaseAgent):
             f"  Scaling         : {p['scale_method']}",
             f"  Horizon         : {p['horizon']} periods",
             f"  Frequency       : {p['freq']}",
+
             f"  Model rec       : {p['model_rec']}  ({p['interm_cls']})",
+            f"  FLANN variant   : {p['flann_variant']} "
+             (f"  basis={p.get('flann_basis','mixed')}[{p.get('flann_order',3)}]"
+             f"  λ={p.get('flann_ridge_lambda',0.01)}")
+             if 'flann' in p.get('model_rec','').lower()
+                or 'rvfl' in p.get('model_rec','').lower() else 
             f"  Ft={p['Ft']:.3f}  Fs={p['Fs']:.3f}  period={p['period']}",
             "",
             "  Split breakdown:",

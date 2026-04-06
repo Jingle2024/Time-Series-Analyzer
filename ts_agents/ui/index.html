@@ -911,6 +911,8 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
       <div class="grid-4" id="prep-stats-row" style="margin-bottom:16px"></div>
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Timeline</div>
+        <div id="prep-model-toolbar" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div id="prep-model-summary" style="margin-bottom:10px;font-size:12px;color:var(--tx2)"></div>
         <canvas id="prep-timeline-chart" height="110"></canvas>
         <div id="prep-timeline-meta" style="margin-top:8px;font-size:12px;color:var(--tx2)"></div>
       </div>
@@ -921,6 +923,7 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Model Comparison (MAPE)</div>
         <div id="prep-model-best" style="margin-bottom:8px;font-size:12px;color:var(--tx2)"></div>
+        <div id="prep-model-legend" style="margin-bottom:8px;font-size:12px;color:var(--tx3)"></div>
         <div class="tbl-wrap" id="prep-model-compare" style="max-height:220px;overflow:auto"></div>
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -1100,8 +1103,10 @@ const S = {
   varRoles: {}, depCols: [], indepCols: [], eventCols: [],
   targetFreq: null, downloadToken: null, downloadExt: 'csv',
   forecastDownloadToken: null, forecastDownloadExt: 'xlsx',
+  prepResult: null, prepSelectedModel: null, prepCompareModels: [],
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
+  hierTreeDeferred: false, hierChildCache: {},
   currentNodePath: {},   // {region:"North", country:"UK", ...}
   analyzeMode: 'single', // 'single' | 'hierarchy'
   charts: {},
@@ -1146,6 +1151,12 @@ function buildTable(rows, cols) {
 }
 function statCard(val,label,sub='',color='var(--tx)') {
   return `<div class="stat-card"><div class="stat-val" style="color:${color}">${val}</div><div class="stat-label">${label}</div>${sub?`<div class="stat-sub">${sub}</div>`:''}</div>`;
+}
+function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function escJsStr(v) {
+  return String(v ?? '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
 function strengthBar(label,value,colorClass,note='') {
   const pct=Math.round((value||0)*100);
@@ -1353,26 +1364,28 @@ function setAnalyzeMode(mode) {
 // ─── HIERARCHY TREE LOADING ───────────────────────────────
 async function loadHierarchyTree() {
   if(!S.token||!S.isHierarchy) return;
-  if(S.hierTree) { renderTree(); return; }  // already loaded
+  if(S.hierTree || S.hierTreeDeferred) { renderTree(); return; }  // already loaded
   try {
     const r=await api('/api/hierarchy-tree',{token:S.token});
     S.hierTree=r.tree;
     S.hierLevels=r.levels;
     S.hierLevelValues=r.level_values;
-    document.getElementById('tree-total-leaves').textContent=`${r.total_leaves} leaves`;
-    renderTree();
+    S.hierTreeDeferred=!!r.tree_deferred;
+    S.hierChildCache={};
+    document.getElementById('tree-total-leaves').textContent = r.total_leaves!=null ? `${r.total_leaves} leaves` : 'large dataset';
+    await renderTree();
     toast('Hierarchy tree loaded ✓','ok');
   } catch(e){toast(`Tree load failed: ${e.message}`,'err');}
 }
 
 // ─── CASCADING DROPDOWNS ──────────────────────────────────
-function renderTree() {
-  buildCascadeDropdowns(); // in sidebar
-  buildCascadeDropdownsInline(); // in analyzer bar
+async function renderTree() {
+  await buildCascadeDropdowns(); // in sidebar
+  await buildCascadeDropdownsInline(); // in analyzer bar
   buildVisualTree();
 }
 
-function buildCascadeDropdowns() {
+async function buildCascadeDropdowns() {
   const container=document.getElementById('tree-cascade-selects');
   if(!container) return;
   container.innerHTML='';
@@ -1386,14 +1399,15 @@ function buildCascadeDropdowns() {
     sel.id=`cs-${idx}`;
     sel.className='cascade-select';
     if(idx>0) sel.disabled=true;
-    populateCascadeSelect(sel, idx, {});
     sel.addEventListener('change',()=>onCascadeChange(idx));
     row.appendChild(badge); row.appendChild(sel);
     container.appendChild(row);
   });
+  const firstSel=document.getElementById('cs-0');
+  if(firstSel) await populateCascadeSelect(firstSel, 0, {});
 }
 
-function buildCascadeDropdownsInline() {
+async function buildCascadeDropdownsInline() {
   // dropdowns shown in the analyzer controls bar
   const container=document.getElementById('cascade-dropdowns');
   if(!container) return;
@@ -1407,20 +1421,51 @@ function buildCascadeDropdownsInline() {
     sel.className='form-control';
     sel.style.fontSize='12px';
     if(idx>0) sel.disabled=true;
-    populateCascadeSelectInline(sel,idx,{});
     sel.addEventListener('change',()=>onCascadeChangeInline(idx));
     wrap.appendChild(sel);
     container.appendChild(wrap);
   });
+  const firstSel=document.getElementById('ci-0');
+  if(firstSel) await populateCascadeSelectInline(firstSel,0,{});
 }
 
-function populateCascadeSelect(sel, levelIdx, currentPath) {
-  sel.innerHTML='<option value="">— All —</option>';
-  let values=S.hierLevelValues[S.hierLevels[levelIdx]]||[];
-  // filter to children of current path
-  if(levelIdx>0) {
-    values=getChildValues(currentPath,levelIdx);
+function getChildValuesFromTree(path, levelIdx) {
+  let node=S.hierTree;
+  for(let i=0;i<levelIdx;i++){
+    const v=path[S.hierLevels[i]];
+    if(!v||!node||!node[v]) return [];
+    node=node[v];
   }
+  if(typeof node==='object'&&!Array.isArray(node)) return Object.keys(node);
+  return [];
+}
+
+function childCacheKey(path, levelIdx){
+  return `${S.hierLevels[levelIdx] || levelIdx}::${JSON.stringify(path||{})}`;
+}
+
+async function fetchChildValues(path, levelIdx) {
+  if(levelIdx===0) return S.hierLevelValues[S.hierLevels[0]]||[];
+  if(S.hierTree && !S.hierTreeDeferred) return getChildValuesFromTree(path, levelIdx);
+
+  const key=childCacheKey(path, levelIdx);
+  if(S.hierChildCache[key]) return S.hierChildCache[key];
+
+  const r=await api('/api/hierarchy-children',{
+    token:S.token,
+    path,
+    next_level:S.hierLevels[levelIdx],
+    max_values:500
+  });
+  S.hierChildCache[key]=r.values||[];
+  return S.hierChildCache[key];
+}
+
+async function populateCascadeSelect(sel, levelIdx, currentPath) {
+  sel.innerHTML='<option value="">— All —</option>';
+  let values = levelIdx>0
+    ? await fetchChildValues(currentPath, levelIdx)
+    : (S.hierLevelValues[S.hierLevels[levelIdx]]||[]);
   values.forEach(v=>{
     const opt=document.createElement('option');
     opt.value=v; opt.textContent=v;
@@ -1428,28 +1473,18 @@ function populateCascadeSelect(sel, levelIdx, currentPath) {
   });
 }
 
-function populateCascadeSelectInline(sel, levelIdx, currentPath) {
+async function populateCascadeSelectInline(sel, levelIdx, currentPath) {
   sel.innerHTML='<option value="">All</option>';
-  let values=S.hierLevelValues[S.hierLevels[levelIdx]]||[];
-  if(levelIdx>0) values=getChildValues(currentPath,levelIdx);
+  let values = levelIdx>0
+    ? await fetchChildValues(currentPath, levelIdx)
+    : (S.hierLevelValues[S.hierLevels[levelIdx]]||[]);
   values.forEach(v=>{
     const opt=document.createElement('option');
     opt.value=v; opt.textContent=v; sel.appendChild(opt);
   });
 }
 
-function getChildValues(path, levelIdx) {
-  let node=S.hierTree;
-  for(let i=0;i<levelIdx;i++){
-    const v=path[S.hierLevels[i]];
-    if(!v||!node[v]) return [];
-    node=node[v];
-  }
-  if(typeof node==='object'&&!Array.isArray(node)) return Object.keys(node);
-  return [];
-}
-
-function onCascadeChange(changedIdx) {
+async function onCascadeChange(changedIdx) {
   const path={};
   for(let i=0;i<=changedIdx;i++){
     const sel=document.getElementById(`cs-${i}`);
@@ -1460,17 +1495,17 @@ function onCascadeChange(changedIdx) {
     const sel=document.getElementById(`cs-${i}`);
     if(!sel) continue;
     sel.disabled=!path[S.hierLevels[changedIdx]];
-    populateCascadeSelect(sel,i,path);
+    await populateCascadeSelect(sel,i,path);
     sel.value='';
   }
   S.currentNodePath=path;
   updateBreadcrumb(path);
-  syncInlineDropdowns(path);
+  await syncInlineDropdowns(path);
   // also highlight visual tree node
   highlightVisualNode(path);
 }
 
-function onCascadeChangeInline(changedIdx) {
+async function onCascadeChangeInline(changedIdx) {
   const path={};
   for(let i=0;i<=changedIdx;i++){
     const sel=document.getElementById(`ci-${i}`);
@@ -1480,34 +1515,36 @@ function onCascadeChangeInline(changedIdx) {
     const sel=document.getElementById(`ci-${i}`);
     if(!sel) continue;
     sel.disabled=!path[S.hierLevels[changedIdx]];
-    populateCascadeSelectInline(sel,i,path);
+    await populateCascadeSelectInline(sel,i,path);
     sel.value='';
   }
   S.currentNodePath=path;
   updateBreadcrumb(path);
-  syncSidebarDropdowns(path);
+  await syncSidebarDropdowns(path);
 }
 
-function syncInlineDropdowns(path) {
-  S.hierLevels.forEach((lvl,idx)=>{
+async function syncInlineDropdowns(path) {
+  for(let idx=0; idx<S.hierLevels.length; idx++){
+    const lvl=S.hierLevels[idx];
     const sel=document.getElementById(`ci-${idx}`);
-    if(!sel) return;
+    if(!sel) continue;
     const v=path[lvl];
     sel.disabled=idx>0&&!path[S.hierLevels[idx-1]];
-    populateCascadeSelectInline(sel,idx,path);
+    await populateCascadeSelectInline(sel,idx,path);
     if(v) sel.value=v;
-  });
+  }
 }
 
-function syncSidebarDropdowns(path) {
-  S.hierLevels.forEach((lvl,idx)=>{
+async function syncSidebarDropdowns(path) {
+  for(let idx=0; idx<S.hierLevels.length; idx++){
+    const lvl=S.hierLevels[idx];
     const sel=document.getElementById(`cs-${idx}`);
     if(!sel) return;
     const v=path[lvl];
     sel.disabled=idx>0&&!path[S.hierLevels[idx-1]];
-    populateCascadeSelect(sel,idx,path);
+    await populateCascadeSelect(sel,idx,path);
     if(v) sel.value=v;
-  });
+  }
 }
 
 // ─── BREADCRUMB ───────────────────────────────────────────
@@ -1815,15 +1852,15 @@ function modelFromDecomp(dc,ic) {
 // ════════════════════════════════════════════════════════════
 // TAB 3 — PREPARE
 // ════════════════════════════════════════════════════════════
-function initPrepTab(){
+async function initPrepTab(){
   if(!S.token){show('prep-no-data');hide('prep-content');return;}
   hide('prep-no-data'); show('prep-content');
-  loadSeriesList();
-  setPrepMode(S.isHierarchy ? 'hierarchy' : 'single');
+  await loadSeriesList();
+  await setPrepMode(S.isHierarchy ? 'hierarchy' : 'single');
   setPrepIntervalMode();
 }
 
-function setPrepMode(mode){
+async function setPrepMode(mode){
   S.prepMode = (mode === 'hierarchy' && S.isHierarchy) ? 'hierarchy' : 'single';
   const sb=document.getElementById('prep-mode-single-btn');
   const hb=document.getElementById('prep-mode-hier-btn');
@@ -1838,7 +1875,7 @@ function setPrepMode(mode){
   }
   if(S.prepMode === 'hierarchy' && S.isHierarchy){
     show('prep-hier-wrap');
-    buildPrepHierCascade();
+    await buildPrepHierCascade();
   } else {
     hide('prep-hier-wrap');
   }
@@ -1855,17 +1892,21 @@ async function loadSeriesList(){
   if(!sel) return;
   const dep=(S.depCols&&S.depCols.length?S.depCols:(S.valueCols||[]));
   sel.innerHTML=dep.map(c=>`<option value="${c}">${c}</option>`).join('');
-  if(S.isHierarchy && (!S.hierTree || !S.hierLevels || !S.hierLevels.length)){
+  if(S.isHierarchy && (!S.hierTree && !S.hierTreeDeferred || !S.hierLevels || !S.hierLevels.length)){
     try{
       const r=await api('/api/hierarchy-tree',{token:S.token});
-      S.hierTree=r.tree; S.hierLevels=r.levels; S.hierLevelValues=r.level_values;
+      S.hierTree=r.tree;
+      S.hierLevels=r.levels;
+      S.hierLevelValues=r.level_values;
+      S.hierTreeDeferred=!!r.tree_deferred;
+      S.hierChildCache={};
     }catch(e){
       toast(`Hierarchy tree unavailable: ${e.message}`,'err');
     }
   }
 }
 
-function buildPrepHierCascade(){
+async function buildPrepHierCascade(){
   const wrap=document.getElementById('prep-hier-cascade');
   if(!wrap || !S.hierLevels || !S.hierLevels.length) return;
   wrap.innerHTML='';
@@ -1903,13 +1944,17 @@ function buildPrepHierCascade(){
       : `Selected aggregate node: ${parts.join(' > ')} (lower levels remain All and will be aggregated)`;
   };
 
-  const fillLevel=(idx, subtree)=>{
+  const fillLevel=async (idx, currentPath)=>{
     const sel=document.getElementById(`prep-hier-${idx}`);
     if(!sel) return;
-    const options=Object.keys(subtree||{});
+    const options=idx>0
+      ? await fetchChildValues(currentPath, idx)
+      : (S.hierLevelValues[S.hierLevels[0]] || []);
     sel.innerHTML=`<option value="">All</option>`+options.map(v=>`<option value="${v}">${v}</option>`).join('');
     sel.disabled=false;
-    sel.onchange=()=>{
+    sel.onchange=async ()=>{
+      const nextPath={...currentPath};
+      if(sel.value) nextPath[S.hierLevels[idx]]=sel.value;
       for(let j=idx+1;j<S.hierLevels.length;j++){
         const nxt=document.getElementById(`prep-hier-${j}`);
         if(nxt){
@@ -1919,13 +1964,12 @@ function buildPrepHierCascade(){
         }
       }
       if(sel.value){
-        const nextSub=(subtree||{})[sel.value]||{};
-        if(idx+1<S.hierLevels.length) fillLevel(idx+1,nextSub);
+        if(idx+1<S.hierLevels.length) await fillLevel(idx+1,nextPath);
       }
       updatePrepHierNote();
     };
   };
-  fillLevel(0,S.hierTree||{});
+  await fillLevel(0,{});
   updatePrepHierNote();
 }
 
@@ -1997,6 +2041,16 @@ async function runForecastPrep(){
 }
 
 function renderForecastPrepResults(r){
+  S.prepResult=r;
+  const availableModels=(r.available_models||[]).filter(Boolean);
+  const preferredSelected=
+    (S.prepSelectedModel && availableModels.includes(S.prepSelectedModel) && S.prepSelectedModel) ||
+    (r.selected_model && availableModels.includes(r.selected_model) && r.selected_model) ||
+    (r.best_model && availableModels.includes(r.best_model) && r.best_model) ||
+    (r.recommended_candidate_model && availableModels.includes(r.recommended_candidate_model) && r.recommended_candidate_model) ||
+    availableModels[0] || null;
+  S.prepSelectedModel=preferredSelected;
+  S.prepCompareModels=(S.prepCompareModels||[]).filter(m=>m!==S.prepSelectedModel && availableModels.includes(m)).slice(0,3);
   const sp=r.series_profile||{};
   const split=r.split_counts||{};
   const splitsTxt=Object.entries(split).map(([k,v])=>`${k}:${v}`).join(' | ');
@@ -2007,9 +2061,11 @@ function renderForecastPrepResults(r){
     statCard(splitsTxt||'n/a','Splits','','var(--tx)')
   ].join(''));
 
-  renderTimelineChart(r.timeline||{});
+  renderPrepModelControls(r);
+  renderTimelineChart(r);
   renderModelParamsGrid(r.model_params||{});
-  const cmp=(r.model_comparison||[]).map(x=>({
+  renderPrepModelComparison(r);
+  /* const cmp=(r.model_comparison||[]).map(x=>({
     model:x.model||'—',
     mape:x.mape==null?'—':x.mape,
     rmse:x.rmse==null?'—':x.rmse,
@@ -2017,7 +2073,7 @@ function renderForecastPrepResults(r){
     status:x.status||'—'
   }));
   setHtml('prep-model-best',`Best model: <strong style="color:var(--a1)">${r.best_model||'—'}</strong> (selection by lowest MAPE)`);
-  setHtml('prep-model-compare',buildTable(cmp,['model','mape','rmse','mae','status']));
+  setHtml('prep-model-compare',buildTable(cmp,['model','mape','rmse','mae','status'])); */
   setHtml('prep-feature-preview',buildTable(r.feature_preview||[]));
   setHtml('prep-future-preview',buildTable(r.future_preview||[]));
   S.forecastDownloadToken=r.download_token||null;
@@ -2026,23 +2082,158 @@ function renderForecastPrepResults(r){
   setHtml('prep-report',(r.report||'No report generated.').toString());
 }
 
-function renderTimelineChart(timeline){
+function getPrepModelPalette(){
+  return ['#8b5cf6','#06b6d4','#f97316','#10b981','#ef4444','#f59e0b','#3b82f6','#ec4899'];
+}
+
+function getPrepModelColor(name, selected=false){
+  const result=S.prepResult||{};
+  const models=(result.available_models||[]).filter(Boolean);
+  const idx=Math.max(0, models.indexOf(name));
+  const color=getPrepModelPalette()[idx % getPrepModelPalette().length];
+  return selected ? color : color+'cc';
+}
+
+function setPrepSelectedModel(name){
+  if(!S.prepResult) return;
+  const available=(S.prepResult.available_models||[]);
+  if(!available.includes(name)) return;
+  S.prepSelectedModel=name;
+  S.prepCompareModels=(S.prepCompareModels||[]).filter(m=>m!==name);
+  renderPrepModelControls(S.prepResult);
+  renderPrepModelComparison(S.prepResult);
+  renderTimelineChart(S.prepResult);
+}
+
+function togglePrepCompareModel(name){
+  if(!S.prepResult || name===S.prepSelectedModel) return;
+  const available=(S.prepResult.available_models||[]);
+  if(!available.includes(name)) return;
+  const current=new Set(S.prepCompareModels||[]);
+  if(current.has(name)) current.delete(name);
+  else{
+    if(current.size>=3){
+      const first=[...current][0];
+      current.delete(first);
+    }
+    current.add(name);
+  }
+  S.prepCompareModels=[...current];
+  renderPrepModelControls(S.prepResult);
+  renderPrepModelComparison(S.prepResult);
+  renderTimelineChart(S.prepResult);
+}
+
+function renderPrepModelControls(r){
+  const available=(r.available_models||[]).filter(Boolean);
+  const recommended=r.recommended_model||'—';
+  const recommendedCandidate=r.recommended_candidate_model||null;
+  const selected=S.prepSelectedModel||r.selected_model||available[0]||null;
+  const compare=(S.prepCompareModels||[]).filter(m=>m!==selected && available.includes(m));
+  const toolbar=document.getElementById('prep-model-toolbar');
+  if(toolbar){
+    const compareButtons=available.filter(m=>m!==selected).map(m=>{
+      const active=compare.includes(m);
+      return `<button class="btn ${active?'btn-primary':'btn-ghost'} btn-sm" onclick="togglePrepCompareModel('${escJsStr(m)}')">${active?'Hide':'Compare'} ${escapeHtml(m)}</button>`;
+    }).join('');
+    toolbar.innerHTML=`
+      <div class="form-group" style="margin:0;min-width:220px">
+        <label class="form-label">Displayed Forecast Model</label>
+        <select class="form-control" onchange="setPrepSelectedModel(this.value)">
+          ${available.map(m=>`<option value="${escapeHtml(m)}" ${m===selected?'selected':''}>${escapeHtml(m)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:260px">
+        <div class="form-label" style="margin:0">Compare Other Models</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${compareButtons||'<span style="font-size:12px;color:var(--tx3)">No alternate models available</span>'}</div>
+      </div>`;
+  }
+  setHtml('prep-model-summary',[
+    `Recommended: <strong style="color:var(--a4)">${escapeHtml(recommended)}</strong>${recommendedCandidate?` <span class="chip chip-violet" style="margin-left:8px">available as ${escapeHtml(recommendedCandidate)}</span>`:''}`,
+    `Best by MAPE: <strong style="color:var(--a1)">${escapeHtml(r.best_model||'—')}</strong>`,
+    `Selected for chart: <strong style="color:var(--a3)">${escapeHtml(selected||'—')}</strong>${compare.length?` · Comparing: ${compare.map(escapeHtml).join(', ')}`:''}`
+  ].join(' &nbsp;·&nbsp; '));
+}
+
+function renderPrepModelComparison(r){
+  const recommendedCandidate=r.recommended_candidate_model||null;
+  const selected=S.prepSelectedModel||r.selected_model||null;
+  setHtml('prep-model-best',`Best model: <strong style="color:var(--a1)">${r.best_model||'—'}</strong> (selection by lowest MAPE)`);
+  setHtml('prep-model-legend','Use the buttons to switch the forecast shown on the chart or overlay up to three alternative models for visual comparison.');
+  const rows=r.model_comparison||[];
+  if(!rows.length){
+    setHtml('prep-model-compare','<div style="padding:10px;color:var(--tx3);font-size:13px">No model comparison available</div>');
+    return;
+  }
+  const htmlRows=rows.map(row=>{
+    const name=row.model||'—';
+    const available=(r.available_models||[]).includes(name);
+    const compareActive=(S.prepCompareModels||[]).includes(name);
+    const badges=[
+      name===r.best_model?'<span class="chip chip-blue">Best</span>':'',
+      name===recommendedCandidate?'<span class="chip chip-violet">Recommended Candidate</span>':'',
+      name===selected?'<span class="chip chip-green">Selected</span>':'',
+      !available?'<span class="chip chip-amber">No Plot</span>':''
+    ].filter(Boolean).join(' ');
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="color:var(--tx)">${escapeHtml(name)}</strong>
+          ${badges}
+        </div>
+      </td>
+      <td>${row.mape==null?'—':row.mape}</td>
+      <td>${row.rmse==null?'—':row.rmse}</td>
+      <td>${row.mae==null?'—':row.mae}</td>
+      <td>${escapeHtml(row.status||'—')}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn ${name===selected?'btn-success':'btn-secondary'} btn-sm" ${available?'':'disabled'} onclick="setPrepSelectedModel('${escJsStr(name)}')">${name===selected?'Shown':'Use'}</button>
+          <button class="btn ${compareActive?'btn-primary':'btn-ghost'} btn-sm" ${(!available||name===selected)?'disabled':''} onclick="togglePrepCompareModel('${escJsStr(name)}')">${compareActive?'Compared':'Compare'}</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  setHtml('prep-model-compare',`<table><thead><tr><th>Model</th><th>MAPE</th><th>RMSE</th><th>MAE</th><th>Status</th><th>Actions</th></tr></thead><tbody>${htmlRows}</tbody></table>`);
+}
+
+function renderTimelineChart(result){
+  const timeline=result.timeline||{};
   const labels=timeline.labels||[];
   const train=timeline.train||[];
   const validation=timeline.validation||[];
   const test=timeline.test||[];
   const holdout=timeline.holdout||[];
-  const modelFc=timeline.model_forecast||[];
-  const futFc=timeline.future_forecast||[];
-  const futLo=timeline.future_lower_95||[];
-  const futHi=timeline.future_upper_95||[];
+  const modelOutputs=result.model_outputs||{};
+  const selectedModel=S.prepSelectedModel||timeline.selected_model||result.selected_model||null;
+  const selectedOutput=(selectedModel&&modelOutputs[selectedModel])?modelOutputs[selectedModel]:null;
+  const modelFc=(selectedOutput&&selectedOutput.forecast_path)||timeline.model_forecast||[];
+  const futFc=(selectedOutput&&selectedOutput.future_forecast)||timeline.future_forecast||[];
+  const futLo=(selectedOutput&&selectedOutput.future_lower_95)||timeline.future_lower_95||[];
+  const futHi=(selectedOutput&&selectedOutput.future_upper_95)||timeline.future_upper_95||[];
   const obs=timeline.observed||[];
+  const splitLabels=timeline.split_labels||[];
   const holdoutStart=timeline.holdout_start||null;
   const horizonStart=timeline.horizon_start||null;
+  const compareModels=(S.prepCompareModels||[]).filter(m=>m!==selectedModel && modelOutputs[m]);
 
-  const nums=[...obs,...modelFc,...futLo,...futHi].filter(v=>typeof v==='number' && !isNaN(v));
+  const compareVals=compareModels.flatMap(name=>(modelOutputs[name]||{}).forecast_path||[]);
+  const nums=[...obs,...modelFc,...futLo,...futHi,...compareVals].filter(v=>typeof v==='number' && !isNaN(v));
   const ymin=nums.length?Math.min(...nums):0;
   const ymax=nums.length?Math.max(...nums):1;
+  const histScatter=labels.map((lbl,i)=>{
+    const y=obs[i];
+    return typeof y==='number' && !isNaN(y) ? {x:lbl,y} : null;
+  }).filter(Boolean);
+  const histScatterColors=obs.map((y,i)=>{
+    if(typeof y!=='number' || isNaN(y)) return 'rgba(0,0,0,0)';
+    const split=splitLabels[i]||'';
+    if(split==='train') return '#60a5fa';
+    if(split==='validation') return '#fbbf24';
+    if(split==='test') return '#2dd4bf';
+    if(split==='holdout') return '#f87171';
+    return '#cbd5e1';
+  }).filter(c=>c!=='rgba(0,0,0,0)');
 
   destroyChart('prep-timeline-chart');
   const ctx=document.getElementById('prep-timeline-chart');
@@ -2052,14 +2243,37 @@ function renderTimelineChart(timeline){
     data:{
       labels,
       datasets:[
+        {
+          label:'Historical Observations',
+          type:'scatter',
+          data:histScatter,
+          parsing:false,
+          pointRadius:3,
+          pointHoverRadius:4,
+          pointBackgroundColor:histScatterColors,
+          pointBorderColor:'#0f172a',
+          pointBorderWidth:0.8,
+          showLine:false
+        },
         {label:'Train',data:train,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
         {label:'Validation',data:validation,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
         {label:'Test',data:test,borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
         {label:'Holdout (actual)',data:holdout,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',pointRadius:2,borderWidth:2,tension:.2,fill:false},
-        {label:'Model Forecast',data:modelFc,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.08)',pointRadius:0,borderWidth:1.5,borderDash:[8,5],tension:.2,fill:false},
-        {label:'95% Lower',data:futLo,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:false},
-        {label:'95% Upper',data:futHi,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:'-1',backgroundColor:'rgba(139,92,246,.12)'},
-        {label:'Future Forecast',data:futFc,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.08)',pointRadius:0,borderWidth:2.5,tension:.2,fill:false},
+        {label:`Selected Forecast${selectedModel?` · ${selectedModel}`:''}`,data:modelFc,borderColor:getPrepModelColor(selectedModel||'selected',true),backgroundColor:'rgba(139,92,246,.08)',pointRadius:0,borderWidth:1.5,borderDash:[8,5],tension:.2,fill:false},
+        {label:`95% Lower${selectedModel?` · ${selectedModel}`:''}`,data:futLo,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:false},
+        {label:`95% Upper${selectedModel?` · ${selectedModel}`:''}`,data:futHi,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:'-1',backgroundColor:'rgba(139,92,246,.12)'},
+        {label:`Future Forecast${selectedModel?` · ${selectedModel}`:''}`,data:futFc,borderColor:getPrepModelColor(selectedModel||'future',true),backgroundColor:'rgba(124,58,237,.08)',pointRadius:0,borderWidth:2.5,tension:.2,fill:false},
+        ...compareModels.map(name=>({
+          label:`Compare · ${name}`,
+          data:(modelOutputs[name]||{}).forecast_path||[],
+          borderColor:getPrepModelColor(name,false),
+          backgroundColor:'transparent',
+          pointRadius:0,
+          borderWidth:1.3,
+          borderDash:[4,4],
+          tension:.2,
+          fill:false
+        })),
         ...(holdoutStart ? [{
           label:'Holdout start',
           data:[{x:holdoutStart,y:ymin},{x:holdoutStart,y:ymax}],
@@ -2097,6 +2311,8 @@ function renderTimelineChart(timeline){
   });
 
   const metaParts=[];
+  if(selectedModel) metaParts.push(`Selected model: ${selectedModel}`);
+  if(compareModels.length) metaParts.push(`Comparing: ${compareModels.join(', ')}`);
   if(holdoutStart) metaParts.push(`Holdout start: ${holdoutStart}`);
   if(horizonStart) metaParts.push(`Horizon start: ${horizonStart}`);
   if(timeline.horizon_n!=null) metaParts.push(`Horizon periods: ${timeline.horizon_n}`);
@@ -2368,9 +2584,20 @@ const STAB = {
   ],
 };
 
-function initStabilityTab() {
+async function initStabilityTab() {
   if (!S.token) { show('stab-no-data'); hide('stab-ready'); return; }
   hide('stab-no-data'); show('stab-ready');
+
+  if (S.isHierarchy && (!S.hierTree || !S.hierLevels || !S.hierLevels.length)) {
+    try {
+      const r = await api('/api/hierarchy-tree', { token: S.token });
+      S.hierTree = r.tree;
+      S.hierLevels = r.levels;
+      S.hierLevelValues = r.level_values;
+    } catch (e) {
+      toast(`Hierarchy tree unavailable: ${e.message}`, 'err');
+    }
+  }
 
   // Populate level selector — all hierarchy levels
   const levelSel = document.getElementById('stab-level-sel');
@@ -2418,27 +2645,47 @@ function buildStabParentFilters() {
     sel.id = `stab-parent-${i}`;
     sel.className = 'form-control';
     sel.style.cssText = 'padding:7px 10px;font-size:12px';
-    sel.innerHTML = '<option value="">All</option>';
-    // populate from level_values
-    const vals = S.hierLevelValues?.[lvl] || [];
-    vals.forEach(v => {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = v;
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', () => syncStabParentPath());
+    if (i > 0) sel.disabled = true;
+    sel.addEventListener('change', () => syncStabParentPath(i));
     wrap.appendChild(sel);
     container.appendChild(wrap);
   });
+  syncStabParentPath(-1);
 }
 
-function syncStabParentPath() {
+function populateStabParentSelect(levelIdx, currentPath) {
+  const lvl = (S.hierCols || [])[levelIdx];
+  const sel = document.getElementById(`stab-parent-${levelIdx}`);
+  if (!lvl || !sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All</option>';
+  const vals = levelIdx > 0
+    ? getChildValues(currentPath, levelIdx)
+    : (S.hierLevelValues?.[lvl] || []);
+  vals.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = v;
+    sel.appendChild(o);
+  });
+  if (prev && vals.includes(prev)) sel.value = prev;
+}
+
+function syncStabParentPath(changedIdx = -1) {
   STAB.parentPath = {};
   const idx = S.hierCols?.indexOf(STAB.levelCol) ?? -1;
   const parentLevels = S.hierCols?.slice(0, idx) || [];
   parentLevels.forEach((lvl, i) => {
     const sel = document.getElementById(`stab-parent-${i}`);
-    if (sel && sel.value) STAB.parentPath[lvl] = sel.value;
+    if (!sel) return;
+    if (changedIdx >= 0 && i > changedIdx) {
+      sel.value = '';
+      sel.disabled = true;
+    }
+    populateStabParentSelect(i, STAB.parentPath);
+    if (sel.value) STAB.parentPath[lvl] = sel.value;
+    const next = document.getElementById(`stab-parent-${i + 1}`);
+    if (next) next.disabled = !sel.value;
   });
 }
 

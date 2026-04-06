@@ -60,6 +60,11 @@ from agents.missing_values_agent import MissingValuesAgent
 from agents.intermittency_agent import IntermittencyAgent
 from agents.data_preparation_agent import DataPreparationAgent
 from agents.forecast_preparation_agent import ForecastPreparationAgent
+from agents.flann_family import (
+    FLANNFamily, run_flann_family_forecast,
+    SUPPORTED_VARIANTS as FLANN_VARIANTS,
+    SUPPORTED_BASIS    as FLANN_BASIS,
+)
 from agents.multi_variable_agent import (
     MultiVariableAgent, suggest_roles, detect_event_columns,
     ROLE_DEPENDENT, ROLE_INDEPENDENT, ROLE_EVENT, ROLE_HIERARCHY,
@@ -182,6 +187,40 @@ def _croston_family_forecast(
         fcst *= (1 - alpha / 2.0)
     return np.repeat(max(0.0, fcst), horizon).astype(float)
 
+def _run_flann_forecast(
+    y_full,
+    y_train,
+    y_test,
+    future_idx,
+    exog_all,
+    period_used,
+    variant: str = "flann",
+    basis_family: str = "mixed",
+    order: int = 3,
+    ridge_lambda: float = 1e-2,
+    recurrent_depth: int = 1,
+    rvfl_n_hidden: int = 64,
+    rvfl_activation: str = "sigmoid",
+):
+    """
+    Thin wrapper — delegates to agents.flann_family.run_flann_family_forecast.
+    Kept for backwards-compatibility with the existing call-site.
+    """
+    return run_flann_family_forecast(
+        y_full=y_full,
+        y_train=y_train,
+        y_test=y_test,
+        future_idx=future_idx,
+        exog_all=exog_all,
+        period_used=period_used,
+        variant=variant,
+        basis_family=basis_family,
+        order=order,
+        ridge_lambda=ridge_lambda,
+        recurrent_depth=recurrent_depth,
+        rvfl_n_hidden=rvfl_n_hidden,
+        rvfl_activation=rvfl_activation,
+    )
 
 def _safe(val):
     """Recursively convert numpy types to Python natives."""
@@ -206,6 +245,182 @@ def _safe(val):
     if val is None or val != val:   # NaN check
         return None
     return val
+# def _flann_expand_matrix(
+#     X: np.ndarray,
+#     mean_: np.ndarray,
+#     std_: np.ndarray,
+#     order: int = 3,
+# ) -> np.ndarray:
+#     """Expand tabular inputs into a compact FLANN-style basis space."""
+#     X_arr = np.asarray(X, dtype=float)
+#     if X_arr.ndim == 1:
+#         X_arr = X_arr.reshape(1, -1)
+#     scale = np.where(np.abs(std_) < 1e-8, 1.0, std_)
+#     Xn = (X_arr - mean_) / scale
+#     Xn = np.clip(Xn, -4.0, 4.0)
+
+#     parts = [Xn]
+#     for p in range(2, max(2, int(order)) + 1):
+#         parts.append(np.power(Xn, p))
+#     parts.append(np.sin(np.pi * Xn))
+#     parts.append(np.cos(np.pi * Xn))
+#     Z = np.hstack(parts)
+#     return np.hstack([np.ones((Z.shape[0], 1)), Z])
+
+
+# def _fit_flann_model(
+#     X_train: np.ndarray,
+#     y_train: np.ndarray,
+#     order: int = 3,
+#     ridge_lambda: float = 1e-2,
+# ) -> Optional[Dict[str, Any]]:
+#     X_arr = np.asarray(X_train, dtype=float)
+#     y_arr = np.asarray(y_train, dtype=float).reshape(-1)
+#     if X_arr.ndim != 2 or len(X_arr) < 5 or X_arr.shape[1] == 0 or len(y_arr) != len(X_arr):
+#         return None
+
+#     mean_ = np.nanmean(X_arr, axis=0)
+#     std_ = np.nanstd(X_arr, axis=0)
+#     Z = _flann_expand_matrix(X_arr, mean_, std_, order=order)
+
+#     reg = float(max(1e-8, ridge_lambda))
+#     eye = np.eye(Z.shape[1], dtype=float)
+#     eye[0, 0] = 0.0  # keep intercept unregularized
+#     try:
+#         weights = np.linalg.solve(Z.T @ Z + reg * eye, Z.T @ y_arr)
+#     except np.linalg.LinAlgError:
+#         weights = np.linalg.pinv(Z.T @ Z + reg * eye) @ Z.T @ y_arr
+
+#     return {
+#         "weights": weights,
+#         "mean": mean_,
+#         "std": std_,
+#         "order": int(order),
+#     }
+
+
+# def _predict_flann_model(model: Dict[str, Any], X: np.ndarray) -> np.ndarray:
+#     Z = _flann_expand_matrix(
+#         X=np.asarray(X, dtype=float),
+#         mean_=np.asarray(model["mean"], dtype=float),
+#         std_=np.asarray(model["std"], dtype=float),
+#         order=int(model.get("order", 3)),
+#     )
+#     return np.asarray(Z @ np.asarray(model["weights"], dtype=float), dtype=float).reshape(-1)
+
+
+# def _run_flann_forecast(
+#     y_full: pd.Series,
+#     y_train: pd.Series,
+#     y_test: pd.Series,
+#     future_idx: pd.Index,
+#     exog_all: Optional[pd.DataFrame],
+#     period_used: int,
+# ) -> Optional[Dict[str, np.ndarray]]:
+#     """Train a compact FLANN competitor on lag/exog features and forecast holdout + future."""
+#     y_full = pd.Series(y_full).dropna().astype(float)
+#     y_train = pd.Series(y_train).dropna().astype(float)
+#     y_test = pd.Series(y_test).dropna().astype(float)
+#     if len(y_train) < 8 or len(y_test) == 0:
+#         return None
+
+#     p = int(period_used) if period_used and int(period_used) > 1 else 0
+#     lag_candidates = [1, 2, 3]
+#     if p > 1:
+#         lag_candidates.extend([p, p + 1])
+#     lag_candidates = sorted({lag for lag in lag_candidates if lag < len(y_full)})
+
+#     fl_df = pd.DataFrame(index=y_full.index)
+#     fl_df["y"] = y_full.values
+#     for lag in lag_candidates:
+#         fl_df[f"lag{lag}"] = fl_df["y"].shift(lag)
+#     if len(y_full) >= 4:
+#         fl_df["roll_mean_3"] = fl_df["y"].shift(1).rolling(3).mean()
+#         fl_df["roll_std_3"] = fl_df["y"].shift(1).rolling(3).std()
+#     if len(y_full) >= 8:
+#         fl_df["roll_mean_7"] = fl_df["y"].shift(1).rolling(7).mean()
+#         fl_df["roll_std_7"] = fl_df["y"].shift(1).rolling(7).std()
+
+#     ex_cols: List[str] = []
+#     if exog_all is not None and len(exog_all.columns):
+#         for c in exog_all.columns:
+#             safe_name = f"exog__{c}"
+#             fl_df[safe_name] = exog_all[c].reindex(fl_df.index).astype(float).values
+#             ex_cols.append(safe_name)
+
+#     fl_df = fl_df.dropna()
+#     if len(fl_df) < 8:
+#         return None
+
+#     train_cut = y_train.index[-1]
+#     fl_train = fl_df[fl_df.index <= train_cut]
+#     fl_test = fl_df[fl_df.index.isin(y_test.index)]
+#     if len(fl_train) < 5 or len(fl_test) == 0:
+#         return None
+
+#     x_cols = [c for c in fl_df.columns if c != "y"]
+#     model = _fit_flann_model(
+#         X_train=fl_train[x_cols].values,
+#         y_train=fl_train["y"].values,
+#         order=3,
+#         ridge_lambda=1e-2,
+#     )
+#     if model is None:
+#         return None
+
+#     yhat_test = _predict_flann_model(model, fl_test[x_cols].values)
+
+#     hist = y_full.copy()
+#     fut_preds: List[float] = []
+#     ex_future = pd.DataFrame(0.0, index=future_idx, columns=ex_cols) if ex_cols else None
+#     for dt in future_idx:
+#         row: Dict[str, float] = {}
+#         for lag in lag_candidates:
+#             row[f"lag{lag}"] = float(hist.iloc[-lag]) if len(hist) >= lag else float(hist.iloc[-1])
+#         if "roll_mean_3" in x_cols:
+#             row["roll_mean_3"] = float(hist.iloc[-3:].mean()) if len(hist) >= 3 else float(hist.mean())
+#         if "roll_std_3" in x_cols:
+#             row["roll_std_3"] = float(hist.iloc[-3:].std()) if len(hist) >= 3 else 0.0
+#         if "roll_mean_7" in x_cols:
+#             row["roll_mean_7"] = float(hist.iloc[-7:].mean()) if len(hist) >= 7 else float(hist.mean())
+#         if "roll_std_7" in x_cols:
+#             row["roll_std_7"] = float(hist.iloc[-7:].std()) if len(hist) >= 7 else 0.0
+#         for c in ex_cols:
+#             row[c] = float(ex_future.loc[dt, c]) if ex_future is not None else 0.0
+#         x_row = np.array([row[col] for col in x_cols], dtype=float).reshape(1, -1)
+#         pred = float(_predict_flann_model(model, x_row)[0])
+#         fut_preds.append(pred)
+#         hist = pd.concat([hist, pd.Series([pred], index=[dt])])
+
+#     return {
+#         "holdout_pred": np.asarray(yhat_test, dtype=float),
+#         "future_pred": np.asarray(fut_preds, dtype=float),
+#     }
+
+
+# def _safe(val):
+#     """Recursively convert numpy types to Python natives."""
+#     if isinstance(val, dict):
+#         return {k: _safe(v) for k, v in val.items()}
+#     if isinstance(val, (list, tuple, set)):
+#         return [_safe(v) for v in val]
+#     if isinstance(val, (np.bool_, bool)):
+#         return bool(val)
+#     if isinstance(val, (np.integer,)):
+#         return int(val)
+#     if isinstance(val, (np.floating,)):
+#         return float(val)
+#     if isinstance(val, np.ndarray):
+#         return val.tolist()
+#     if isinstance(val, pd.Series):
+#         return val.tolist()
+#     if isinstance(val, pd.DataFrame):
+#         return val.to_dict(orient="records")
+#     if isinstance(val, (pd.Timestamp, pd.Timedelta)):
+#         return str(val)
+#     if val is None or val != val:   # NaN check
+#         return None
+#     return val
 
 
 def _downsample_series(series: pd.Series, max_points: int = DEFAULT_MAX_CHART_POINTS) -> pd.Series:
@@ -242,6 +457,9 @@ def _upgrade_model_for_exog(base_rec: str, has_exog: bool) -> str:
         "Holt-Winters / SARIMA":"SARIMAX (with exog)",
         "ETS(A,N,A) / SARIMA":  "SARIMAX (with exog)",
         "Holt / ARIMA(p,1,0)":  "ARIMAX + exog",
+        "FLANN":           "FLANN + exog",
+        "RecurrentFLANN":  "RecurrentFLANN + exog",
+        "RVFL":            "RVFL + exog",
         "Croston / SBA":        "Croston + event regressors",
         "TSB / Zero-Inflated":  "TSB + event regressors",
     }
@@ -249,6 +467,35 @@ def _upgrade_model_for_exog(base_rec: str, has_exog: bool) -> str:
         if k in base_rec:
             return v
     return base_rec + " + exog"
+
+
+def _resolve_recommended_candidate(model_rec: str, available_models: List[str]) -> Optional[str]:
+    """Map a descriptive recommendation string onto an evaluated candidate model."""
+    available = set(available_models or [])
+    rec = (model_rec or "").lower()
+
+    preference_map = [
+        (("tsb", "zero-inflated"), ["TSB"]),
+        (("croston", "sba"), ["Croston", "SBA"]),
+        (("arimax", "sarimax"), ["ARIMAX", "ARIMA", "ETS"]),
+        (("tbats",), ["ETS", "ARIMA"]),
+        (("holt-winters",), ["ETS", "ARIMA"]),
+        (("ets", "holt"), ["ETS"]),
+        (("arima", "sarima"), ["ARIMA", "ARIMAX"]),
+        (("recurrentflann", "recurrent_flann"), ["RecurrentFLANN", "FLANN"]),
+        (("rvfl",),          ["RVFL", "FLANN"]),
+        (("flann",),         ["FLANN", "RecurrentFLANN", "RVFL"]),
+        (("lightgbm", "linear regression", "linear"), ["LinearRegression"]),
+    ]
+    for markers, candidates in preference_map:
+        if any(marker in rec for marker in markers):
+            for candidate in candidates:
+                if candidate in available:
+                    return candidate
+    for candidate in available_models or []:
+        if candidate.lower() in rec:
+            return candidate
+    return None
 
 
 def _recommend_model(
@@ -1360,6 +1607,15 @@ if _HAS_FASTAPI:
         horizon: int = 13
         n_holdout: int = 0
         output_format: str = "excel"  # excel | csv (zip bundle)
+        flann_variant:        str   = "flann"      # flann | recurrent_flann | rvfl
+        flann_basis:          str   = "mixed"      # polynomial | trigonometric |
+                                                # chebyshev | legendre | mixed
+        flann_order:          int   = 3            # expansion order / polynomial degree
+        flann_ridge_lambda:   float = 1e-2         # L2 regularisation for output weights
+        flann_recurrent_depth: int  = 1            # RecurrentFLANN: feedback window depth
+        rvfl_n_hidden:        int   = 64           # RVFL: number of random hidden nodes
+        rvfl_activation:      str   = "sigmoid"    # RVFL: sigmoid | relu | tanh | sin
+        run_all_flann_variants: bool = False        # run all 3 variants and compare
         allow_negative_forecast: bool = False
 
     @app.post("/api/forecast-prepare")
@@ -1614,6 +1870,7 @@ if _HAS_FASTAPI:
 
         # Candidate model comparison on holdout by MAPE.
         model_comparison: List[Dict[str, Any]] = []
+        model_predictions: Dict[str, Dict[str, Any]] = {}
         best_model_name = "Baseline"
         best_test_pred: Optional[np.ndarray] = None
         best_future_pred: Optional[np.ndarray] = None
@@ -1700,6 +1957,12 @@ if _HAS_FASTAPI:
                 m = _forecast_metrics(y_test.values, yhat_test_arr)
                 row = {"model": name, **m, "status": "ok" if not note else note}
                 model_comparison.append(row)
+                model_predictions[name] = {
+                    "holdout_pred": yhat_test_arr.tolist(),
+                    "future_pred": (yhat_future_arr.tolist() if yhat_future_arr is not None else []),
+                    "metrics": m,
+                    "status": row["status"],
+                }
                 if m.get("mape") is not None:
                     current_best = min(
                         [r["mape"] for r in model_comparison if r.get("mape") is not None],
@@ -1849,6 +2112,85 @@ if _HAS_FASTAPI:
             except Exception as e:
                 _register_model("LinearRegression", None, None, str(e))
 
+            # # FLANN with basis-expanded lag/exogenous features.
+            # try:
+            #     flann_res = _run_flann_forecast(
+            #         y_full=y_full,
+            #         y_train=y_train,
+            #         y_test=y_test,
+            #         future_idx=future_df.index,
+            #         exog_all=exog_all,
+            #         period_used=period_used,
+            #     )
+            #     if flann_res is None:
+            #         _register_model("FLANN", None, None, "insufficient rows")
+            #     else:
+            #         flann_note = "basis-expanded lag model"
+            #         if exog_all is not None and exog_all.shape[1] > 0:
+            #             flann_note += " + exog"
+            #         _register_model(
+            #             "FLANN",
+            #             flann_res.get("holdout_pred"),
+            #             flann_res.get("future_pred"),
+            #             flann_note,
+            #         )
+            # except Exception as e:
+            #     _register_model("FLANN", None, None, str(e))
+            # ── FLANN / RecurrentFLANN / RVFL ────────────────────────────────
+            # Shared kwargs drawn from the request body.
+            _flann_kwargs = dict(
+                y_full=y_full,
+                y_train=y_train,
+                y_test=y_test,
+                future_idx=future_df.index,
+                exog_all=exog_all,
+                period_used=period_used,
+                basis_family=body.flann_basis,
+                order=body.flann_order,
+                ridge_lambda=body.flann_ridge_lambda,
+                recurrent_depth=body.flann_recurrent_depth,
+                rvfl_n_hidden=body.rvfl_n_hidden,
+                rvfl_activation=body.rvfl_activation,
+            )
+
+            # Decide which variants to run.
+            variants_to_run = (
+                list(FLANN_VARIANTS)            # all three
+                if body.run_all_flann_variants
+                else [body.flann_variant]       # just the requested one
+            )
+
+            for _variant in variants_to_run:
+                # Canonical model name shown in the comparison table.
+                _model_label = {
+                    "flann":           "FLANN",
+                    "recurrent_flann": "RecurrentFLANN",
+                    "rvfl":            "RVFL",
+                }.get(_variant, _variant.upper())
+
+                try:
+                    _res = _run_flann_forecast(variant=_variant, **_flann_kwargs)
+                    if _res is None:
+                        _register_model(_model_label, None, None, "insufficient rows")
+                    else:
+                        _exog_note = " + exog" if (exog_all is not None
+                                                   and exog_all.shape[1] > 0) else ""
+                        _basis_note = f"{body.flann_basis}[{body.flann_order}]"
+                        _full_note = f"{_basis_note}{_exog_note}"
+                        if _variant == "recurrent_flann":
+                            _full_note += f" depth={body.flann_recurrent_depth}"
+                        elif _variant == "rvfl":
+                            _full_note += (
+                                f" H={body.rvfl_n_hidden} act={body.rvfl_activation}"
+                            )
+                        _register_model(
+                            _model_label,
+                            _res.get("holdout_pred"),
+                            _res.get("future_pred"),
+                            _full_note,
+                        )
+                except Exception as _e:
+                    _register_model(_model_label, None, None, str(_e))
         # Timeline with split-aware actuals and a baseline model forecast overlay.
         obs_idx = list(feature_df.index)
         fut_idx = list(future_df.index)
@@ -1877,37 +2219,123 @@ if _HAS_FASTAPI:
         # Forecast target dates: holdout + future.
         forecast_targets = [ix for ix, sp in zip(obs_idx, split_obs) if sp == "holdout"] + fut_idx
         non_holdout_vals = [v for v, sp in zip(obs_vals, split_obs) if sp != "holdout" and v is not None]
-        model_forecast_map: Dict[str, float] = {}
-        if len(forecast_targets):
-            # If model comparison produced predictions, prefer the best model output.
-            if best_test_pred is not None and best_future_pred is not None:
-                holdout_targets = [ix for ix, sp in zip(obs_idx, split_obs) if sp == "holdout"]
-                for dt, pred in zip(holdout_targets, best_test_pred.tolist()):
-                    model_forecast_map[str(dt)[:10]] = float(round(float(pred), 6))
-                for dt, pred in zip(fut_idx, best_future_pred.tolist()):
-                    model_forecast_map[str(dt)[:10]] = float(round(float(pred), 6))
-            # Fallback baseline if model comparison failed.
-            elif non_holdout_vals:
-                last = float(non_holdout_vals[-1])
-                drift = 0.0
-                if len(non_holdout_vals) > 1 and Ft > 0.5:
-                    drift = (float(non_holdout_vals[-1]) - float(non_holdout_vals[0])) / (len(non_holdout_vals) - 1)
+        holdout_targets = [ix for ix, sp in zip(obs_idx, split_obs) if sp == "holdout"]
+        holdout_actual = [v for v, sp in zip(obs_vals, split_obs) if sp == "holdout" and v is not None]
+        recommended_candidate = _resolve_recommended_candidate(
+            model_rec,
+            [row["model"] for row in model_comparison if row.get("mape") is not None]
+        )
+        selected_model_name = best_model_name if best_model_name in model_predictions else (
+            recommended_candidate if recommended_candidate in model_predictions else None
+        )
 
-                season_template: Optional[np.ndarray] = None
-                p = int(period_used) if period_used else 0
-                if Fs > 0.5 and p > 1 and len(non_holdout_vals) >= p:
-                    season_template = np.array(non_holdout_vals[-p:], dtype=float)
-                    season_template = season_template - season_template.mean()
+        if len(forecast_targets) and selected_model_name is None and non_holdout_vals:
+            last = float(non_holdout_vals[-1])
+            drift = 0.0
+            if len(non_holdout_vals) > 1 and Ft > 0.5:
+                drift = (float(non_holdout_vals[-1]) - float(non_holdout_vals[0])) / (len(non_holdout_vals) - 1)
 
-                for i, dt in enumerate(forecast_targets):
-                    pred = last + drift * (i + 1)
-                    if season_template is not None and len(season_template):
-                        pred += float(season_template[i % len(season_template)])
-                    if min(non_holdout_vals) >= 0:
-                        pred = max(0.0, pred)
-                    model_forecast_map[str(dt)[:10]] = float(round(pred, 6))
+            season_template: Optional[np.ndarray] = None
+            p = int(period_used) if period_used else 0
+            if Fs > 0.5 and p > 1 and len(non_holdout_vals) >= p:
+                season_template = np.array(non_holdout_vals[-p:], dtype=float)
+                season_template = season_template - season_template.mean()
 
-        model_forecast = [model_forecast_map.get(lbl) for lbl in all_labels]
+            baseline_holdout: List[float] = []
+            baseline_future: List[float] = []
+            for i, _dt in enumerate(forecast_targets):
+                pred = last + drift * (i + 1)
+                if season_template is not None and len(season_template):
+                    pred += float(season_template[i % len(season_template)])
+                if min(non_holdout_vals) >= 0:
+                    pred = max(0.0, pred)
+                pred = float(round(pred, 6))
+                if i < len(holdout_targets):
+                    baseline_holdout.append(pred)
+                else:
+                    baseline_future.append(pred)
+            m = _forecast_metrics(y_test.values, np.asarray(baseline_holdout, dtype=float))
+            model_comparison.append({"model": "Baseline", **m, "status": "fallback"})
+            model_predictions["Baseline"] = {
+                "holdout_pred": baseline_holdout,
+                "future_pred": baseline_future,
+                "metrics": m,
+                "status": "fallback",
+            }
+            if selected_model_name is None:
+                selected_model_name = "Baseline"
+
+        def _build_model_output(
+            model_name: str,
+            holdout_pred_vals: List[float],
+            future_pred_vals: List[float],
+            status: str,
+            metrics: Dict[str, Optional[float]],
+        ) -> Dict[str, Any]:
+            forecast_map: Dict[str, float] = {}
+            for dt, pred in zip(holdout_targets, holdout_pred_vals):
+                forecast_map[str(dt)[:10]] = float(round(float(pred), 6))
+            for dt, pred in zip(fut_idx, future_pred_vals):
+                forecast_map[str(dt)[:10]] = float(round(float(pred), 6))
+
+            forecast_path = [forecast_map.get(lbl) for lbl in all_labels]
+            future_only = [None] * len(obs_idx) + [
+                float(round(float(pred), 4)) if pred is not None else None for pred in future_pred_vals
+            ]
+
+            err_sigma_local = 0.0
+            if holdout_actual and holdout_pred_vals and len(holdout_actual) == len(holdout_pred_vals):
+                errs = [float(a) - float(p) for a, p in zip(holdout_actual, holdout_pred_vals)]
+                if len(errs) >= 2:
+                    err_sigma_local = float(np.std(errs, ddof=1))
+            if err_sigma_local <= 0:
+                base_vals = np.array([v for v in non_holdout_vals if v is not None], dtype=float)
+                if len(base_vals) >= 3:
+                    diff = np.diff(base_vals)
+                    err_sigma_local = float(np.std(diff, ddof=1)) if len(diff) > 1 else float(np.std(base_vals, ddof=1) * 0.1)
+                elif len(base_vals) >= 2:
+                    err_sigma_local = float(np.std(base_vals, ddof=1) * 0.1)
+                else:
+                    err_sigma_local = 1.0
+
+            z_95_local = 1.96
+            lower = [None] * len(obs_idx)
+            upper = [None] * len(obs_idx)
+            for h, pred in enumerate(future_pred_vals, start=1):
+                if pred is None:
+                    lower.append(None)
+                    upper.append(None)
+                    continue
+                band = z_95_local * err_sigma_local * (h ** 0.5)
+                lo = float(pred) - band
+                hi = float(pred) + band
+                if non_holdout_vals and min(non_holdout_vals) >= 0:
+                    lo = max(0.0, lo)
+                lower.append(round(float(lo), 4))
+                upper.append(round(float(hi), 4))
+
+            return {
+                "model": model_name,
+                "status": status,
+                "metrics": _safe(metrics),
+                "forecast_path": [round(float(v), 4) if v is not None else None for v in forecast_path],
+                "future_forecast": future_only,
+                "future_lower_95": lower,
+                "future_upper_95": upper,
+            }
+
+        model_outputs: Dict[str, Dict[str, Any]] = {}
+        for model_name, pred_info in model_predictions.items():
+            model_outputs[model_name] = _build_model_output(
+                model_name=model_name,
+                holdout_pred_vals=pred_info.get("holdout_pred", []),
+                future_pred_vals=pred_info.get("future_pred", []),
+                status=str(pred_info.get("status", "ok")),
+                metrics=pred_info.get("metrics", {}),
+            )
+
+        selected_output = model_outputs.get(selected_model_name or "")
+        model_forecast = selected_output.get("forecast_path", []) if selected_output else [None] * len(all_labels)
         observed_all = obs_vals + ([None] * len(fut_idx))
 
         holdout_start_label = None
@@ -1917,51 +2345,20 @@ if _HAS_FASTAPI:
                 break
         horizon_start_label = str(fut_idx[0])[:10] if len(fut_idx) else None
 
-        # Confidence limits for future horizon (95% normal interval around baseline forecast).
-        holdout_actual = [v for v, sp in zip(obs_vals, split_obs) if sp == "holdout" and v is not None]
-        holdout_pred = [model_forecast_map.get(str(ix)[:10]) for ix, sp in zip(obs_idx, split_obs) if sp == "holdout"]
-        err_sigma = 0.0
-        if holdout_actual and holdout_pred and len(holdout_actual) == len(holdout_pred):
-            errs = [float(a) - float(p) for a, p in zip(holdout_actual, holdout_pred) if p is not None]
-            if len(errs) >= 2:
-                err_sigma = float(np.std(errs, ddof=1))
-        if err_sigma <= 0:
-            base_vals = np.array([v for v in non_holdout_vals if v is not None], dtype=float)
-            if len(base_vals) >= 3:
-                diff = np.diff(base_vals)
-                err_sigma = float(np.std(diff, ddof=1)) if len(diff) > 1 else float(np.std(base_vals, ddof=1) * 0.1)
-            elif len(base_vals) >= 2:
-                err_sigma = float(np.std(base_vals, ddof=1) * 0.1)
-            else:
-                err_sigma = 1.0
-
-        z_95 = 1.96
-        future_forecast = [None] * len(obs_idx)
-        future_lower = [None] * len(obs_idx)
-        future_upper = [None] * len(obs_idx)
-        for h, dt in enumerate(fut_idx, start=1):
-            key = str(dt)[:10]
-            pred = model_forecast_map.get(key)
-            if pred is None:
-                future_forecast.append(None)
-                future_lower.append(None)
-                future_upper.append(None)
-                continue
-            # widen gradually by sqrt(h)
-            band = z_95 * err_sigma * (h ** 0.5)
-            lo = float(pred) - band
-            hi = float(pred) + band
-            if min(non_holdout_vals) >= 0:
-                lo = max(0.0, lo)
-            future_forecast.append(round(float(pred), 4))
-            future_lower.append(round(float(lo), 4))
-            future_upper.append(round(float(hi), 4))
+        future_forecast = selected_output.get("future_forecast", []) if selected_output else ([None] * len(all_labels))
+        future_lower = selected_output.get("future_lower_95", []) if selected_output else ([None] * len(all_labels))
+        future_upper = selected_output.get("future_upper_95", []) if selected_output else ([None] * len(all_labels))
 
         return {
             "ok": True,
             "mode": mode,
             "dep_col": dep_col,
             "node_path": node_path,
+            "recommended_model": model_rec,
+            "recommended_candidate_model": recommended_candidate,
+            "selected_model": selected_model_name,
+            "available_models": [row["model"] for row in model_comparison if row["model"] in model_outputs],
+            "model_outputs": _safe(model_outputs),
             "timeline": {
                 "labels": all_labels,
                 "observed": [round(float(v), 4) if v is not None else None for v in observed_all],
@@ -1974,6 +2371,7 @@ if _HAS_FASTAPI:
                 "future_lower_95": future_lower,
                 "future_upper_95": future_upper,
                 "split_labels": split_all,
+                "selected_model": selected_model_name,
                 "holdout_start": holdout_start_label,
                 "horizon_start": horizon_start_label,
                 "horizon_n": int(len(fut_idx)),
