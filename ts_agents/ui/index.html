@@ -1539,7 +1539,7 @@ async function syncSidebarDropdowns(path) {
   for(let idx=0; idx<S.hierLevels.length; idx++){
     const lvl=S.hierLevels[idx];
     const sel=document.getElementById(`cs-${idx}`);
-    if(!sel) return;
+    if(!sel) continue;
     const v=path[lvl];
     sel.disabled=idx>0&&!path[S.hierLevels[idx-1]];
     await populateCascadeSelect(sel,idx,path);
