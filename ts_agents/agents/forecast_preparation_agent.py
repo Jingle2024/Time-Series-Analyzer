@@ -650,12 +650,9 @@ class ForecastPreparationAgent(BaseAgent):
             f"  Frequency       : {p['freq']}",
 
             f"  Model rec       : {p['model_rec']}  ({p['interm_cls']})",
-            (f"  FLANN variant   : {p['flann_variant']} "
-             (f"  basis={p.get('flann_basis','mixed')}[{p.get('flann_order',3)}]"
-             f"  λ={p.get('flann_ridge_lambda',0.01)}")
-             if 'flann' in p.get('model_rec','').lower()
-                or 'rvfl' in p.get('model_rec','').lower() else 
-            f"  Ft={p['Ft']:.3f}  Fs={p['Fs']:.3f}  period={p['period']}"),
+            (f"FLANN variant: {p['flann_variant']} (basis={p.get('flann_basis', 'mixed')}[{p.get('flann_order', 3)}] λ={p.get('flann_ridge_lambda', 0.01)})" 
+          if any(x in p.get('model_rec', '').lower() for x in ['flann', 'rvfl']) 
+          else f"Ft={p['Ft']:.3f} Fs={p['Fs']:.3f} period={p['period']}"),
             "",
             "  Split breakdown:",
             f"    Train      : {p['n_train']}  {p['date_range_fit'][0]}",
