@@ -327,6 +327,21 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 .toast.info{border-color:rgba(59,130,246,.4);color:var(--a1)}
 
 @media(max-width:960px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}main{padding:14px}}
+
+/* ══ FORECAST-ONLY TOGGLE ══ */
+.fc-only-toggle{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;user-select:none;transition:all .2s;font-size:12px;color:var(--tx2);font-family:'Outfit',sans-serif}
+.fc-only-toggle:hover{border-color:var(--a4);color:var(--tx)}
+.fc-only-toggle.fc-active{border-color:var(--a4);background:rgba(139,92,246,.12);color:var(--a4);box-shadow:0 0 0 1px rgba(139,92,246,.2)}
+.fc-only-toggle .fc-chk{width:14px;height:14px;accent-color:var(--a4);cursor:pointer;flex-shrink:0}
+.fc-only-card.fc-active{border-color:rgba(139,92,246,.4)!important;box-shadow:0 0 16px rgba(139,92,246,.08)}
+#fc-only-badge{display:none;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--a4);background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:4px;padding:2px 7px;vertical-align:middle;margin-left:6px}
+.fc-active #fc-only-badge{display:inline}
+#prep-timeline-chart{transition:height .25s ease;width:100%;display:block}
+#prep-timeline-container{position:relative;width:100%;height:100%;display:flex;flex-direction:column}
+.fc-only-card.fc-active{display:flex;flex-direction:column;min-height:calc(100vh - 200px)}
+.fc-only-card.fc-active #prep-timeline-chart{height:100%;flex:1}
+.fc-only-card canvas{max-height:100%;object-fit:contain}
+
 /* ══ LEVEL STABILITY ══ */
 .interval-pill-row{display:flex;gap:6px;flex-wrap:wrap}
 .ipill{padding:5px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;
@@ -909,11 +924,19 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 
     <div id="prep-results" style="display:none">
       <div class="grid-4" id="prep-stats-row" style="margin-bottom:16px"></div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Timeline</div>
+      <div class="card fc-only-card" id="prep-timeline-card" style="margin-bottom:16px">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <span>Timeline<span id="fc-only-badge">FORECAST VIEW</span></span>
+          <label class="fc-only-toggle" id="fc-only-toggle-btn" title="Hide the historical train/val/test data and zoom into the forecast + holdout region only">
+            <input type="checkbox" class="fc-chk" id="fc-only-chk" onchange="toggleForecastOnly(this.checked)">
+            <span>🔭 Show Forecast Only</span>
+          </label>
+        </div>
         <div id="prep-model-toolbar" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px"></div>
         <div id="prep-model-summary" style="margin-bottom:10px;font-size:12px;color:var(--tx2)"></div>
-        <canvas id="prep-timeline-chart" height="110"></canvas>
+        <div id="prep-timeline-container" style="position:relative;width:100%;height:400px">
+          <canvas id="prep-timeline-chart" height="110"></canvas>
+        </div>
         <div id="prep-timeline-meta" style="margin-top:8px;font-size:12px;color:var(--tx2)"></div>
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -1105,6 +1128,7 @@ const S = {
   targetFreq: null, downloadToken: null, downloadExt: 'csv',
   forecastDownloadToken: null, forecastDownloadExt: 'xlsx',
   prepResult: null, prepSelectedModel: null, prepCompareModels: [],
+  prepForecastOnly: false,
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
   hierTreeDeferred: false, hierChildCache: {},
@@ -2198,30 +2222,98 @@ function renderPrepModelComparison(r){
   setHtml('prep-model-compare',`<table><thead><tr><th>Model</th><th>MAPE</th><th>RMSE</th><th>MAE</th><th>Status</th><th>Actions</th></tr></thead><tbody>${htmlRows}</tbody></table>`);
 }
 
+function toggleForecastOnly(checked){
+  S.prepForecastOnly = !!checked;
+  // Visual state on toggle button and card
+  const btn  = document.getElementById('fc-only-toggle-btn');
+  const card = document.getElementById('prep-timeline-card');
+  const container = document.getElementById('prep-timeline-container');
+  const chk  = document.getElementById('fc-only-chk');
+  if(btn)  btn.classList.toggle('fc-active', S.prepForecastOnly);
+  if(card) card.classList.toggle('fc-active', S.prepForecastOnly);
+  if(chk && chk.checked !== S.prepForecastOnly) chk.checked = S.prepForecastOnly;
+  // Adjust container height: full viewport when forecast-only
+  if(container){
+    if(S.prepForecastOnly){
+      container.style.height = 'calc(100vh - 280px)';
+      container.style.minHeight = '500px';
+    } else {
+      container.style.height = '400px';
+      container.style.minHeight = 'auto';
+    }
+  }
+  // Resize canvas height: taller when forecast-only (more room for model comparison lines)
+  const canvas = document.getElementById('prep-timeline-chart');
+  if(canvas) canvas.setAttribute('height', S.prepForecastOnly ? '400' : '110');
+  // Redraw
+  if(S.prepResult) renderTimelineChart(S.prepResult);
+  toast(S.prepForecastOnly ? '🔭 Forecast-only view — history hidden' : '📈 Full timeline view restored', 'info', 2000);
+}
+
 function renderTimelineChart(result){
   const timeline=result.timeline||{};
-  const labels=timeline.labels||[];
-  const train=timeline.train||[];
-  const validation=timeline.validation||[];
-  const test=timeline.test||[];
-  const holdout=timeline.holdout||[];
+  const allLabels=timeline.labels||[];
+  const allTrain=timeline.train||[];
+  const allVal=timeline.validation||[];
+  const allTest=timeline.test||[];
+  const allHoldout=timeline.holdout||[];
   const modelOutputs=result.model_outputs||{};
   const selectedModel=S.prepSelectedModel||timeline.selected_model||result.selected_model||null;
   const selectedOutput=(selectedModel&&modelOutputs[selectedModel])?modelOutputs[selectedModel]:null;
-  const modelFc=(selectedOutput&&selectedOutput.forecast_path)||timeline.model_forecast||[];
-  const futFc=(selectedOutput&&selectedOutput.future_forecast)||timeline.future_forecast||[];
-  const futLo=(selectedOutput&&selectedOutput.future_lower_95)||timeline.future_lower_95||[];
-  const futHi=(selectedOutput&&selectedOutput.future_upper_95)||timeline.future_upper_95||[];
-  const obs=timeline.observed||[];
-  const splitLabels=timeline.split_labels||[];
+  const allModelFc=(selectedOutput&&selectedOutput.forecast_path)||timeline.model_forecast||[];
+  const allFutFc=(selectedOutput&&selectedOutput.future_forecast)||timeline.future_forecast||[];
+  const allFutLo=(selectedOutput&&selectedOutput.future_lower_95)||timeline.future_lower_95||[];
+  const allFutHi=(selectedOutput&&selectedOutput.future_upper_95)||timeline.future_upper_95||[];
+  const allObs=timeline.observed||[];
+  const allSplitLabels=timeline.split_labels||[];
   const holdoutStart=timeline.holdout_start||null;
   const horizonStart=timeline.horizon_start||null;
   const compareModels=(S.prepCompareModels||[]).filter(m=>m!==selectedModel && modelOutputs[m]);
 
-  const compareVals=compareModels.flatMap(name=>(modelOutputs[name]||{}).forecast_path||[]);
-  const nums=[...obs,...modelFc,...futLo,...futHi,...compareVals].filter(v=>typeof v==='number' && !isNaN(v));
-  const ymin=nums.length?Math.min(...nums):0;
-  const ymax=nums.length?Math.max(...nums):1;
+  // ── Forecast-only mode: trim labels/data to holdout + future window ─────────
+  const forecastOnly = !!S.prepForecastOnly;
+  let sliceStart = 0;
+  if(forecastOnly && holdoutStart){
+    // Find the first index at or after holdoutStart
+    const hi = allLabels.indexOf(holdoutStart);
+    if(hi >= 0) sliceStart = hi;
+  }
+
+  const labels    = forecastOnly ? allLabels.slice(sliceStart)    : allLabels;
+  const train     = forecastOnly ? allTrain.slice(sliceStart)     : allTrain;
+  const validation= forecastOnly ? allVal.slice(sliceStart)       : allVal;
+  const test      = forecastOnly ? allTest.slice(sliceStart)      : allTest;
+  const holdout   = forecastOnly ? allHoldout.slice(sliceStart)   : allHoldout;
+  const obs       = forecastOnly ? allObs.slice(sliceStart)       : allObs;
+  const splitLabels=forecastOnly ? allSplitLabels.slice(sliceStart): allSplitLabels;
+  const modelFc   = forecastOnly ? allModelFc.slice(sliceStart)   : allModelFc;
+  const futFc     = forecastOnly ? allFutFc.slice(sliceStart)     : allFutFc;
+  const futLo     = forecastOnly ? allFutLo.slice(sliceStart)     : allFutLo;
+  const futHi     = forecastOnly ? allFutHi.slice(sliceStart)     : allFutHi;
+
+  // In forecast-only mode the y-range should be computed only from forecast data
+  // so the holdout actuals and all model lines scale to fill the chart neatly.
+  const compareVals=compareModels.flatMap(name=>{
+    const fp=(modelOutputs[name]||{}).forecast_path||[];
+    return forecastOnly ? fp.slice(sliceStart) : fp;
+  });
+
+  let numsBase;
+  if(forecastOnly){
+    // Include holdout actuals + all forecast model lines + CI bands
+    numsBase=[...holdout,...modelFc,...futFc,...futLo,...futHi,...compareVals];
+  } else {
+    numsBase=[...obs,...modelFc,...futLo,...futHi,...compareVals];
+  }
+  const nums=numsBase.filter(v=>typeof v==='number' && !isNaN(v));
+  const rawMin=nums.length?Math.min(...nums):0;
+  const rawMax=nums.length?Math.max(...nums):1;
+  // Add 5% padding above/below so lines don't clip at edges
+  const pad=(rawMax-rawMin)*0.05||rawMax*0.05||1;
+  const ymin=rawMin-pad;
+  const ymax=rawMax+pad;
+
+  // Scatter of historical observation dots (coloured by split)
   const histScatter=labels.map((lbl,i)=>{
     const y=obs[i];
     return typeof y==='number' && !isNaN(y) ? {x:lbl,y} : null;
@@ -2229,95 +2321,175 @@ function renderTimelineChart(result){
   const histScatterColors=obs.map((y,i)=>{
     if(typeof y!=='number' || isNaN(y)) return 'rgba(0,0,0,0)';
     const split=splitLabels[i]||'';
-    if(split==='train') return '#60a5fa';
-    if(split==='validation') return '#fbbf24';
-    if(split==='test') return '#2dd4bf';
-    if(split==='holdout') return '#f87171';
+    if(split==='train')      return forecastOnly ? 'rgba(0,0,0,0)' : '#60a5fa';
+    if(split==='validation') return forecastOnly ? 'rgba(0,0,0,0)' : '#fbbf24';
+    if(split==='test')       return forecastOnly ? 'rgba(0,0,0,0)' : '#2dd4bf';
+    if(split==='holdout')    return '#f87171';
     return '#cbd5e1';
   }).filter(c=>c!=='rgba(0,0,0,0)');
 
   destroyChart('prep-timeline-chart');
   const ctx=document.getElementById('prep-timeline-chart');
   if(!ctx) return;
+
+  // In forecast-only mode: only show holdout actuals, model lines, CI band,
+  // future forecast, and compare model lines. Hide train/val/test line datasets.
+  const historicalDatasets = forecastOnly ? [] : [
+    {label:'Train',       data:train,      borderColor:'#3b82f6',  backgroundColor:'rgba(59,130,246,.08)',  pointRadius:0,borderWidth:2,tension:.2,fill:false},
+    {label:'Validation',  data:validation, borderColor:'#f59e0b',  backgroundColor:'rgba(245,158,11,.08)',  pointRadius:0,borderWidth:2,tension:.2,fill:false},
+    {label:'Test',        data:test,       borderColor:'#14b8a6',  backgroundColor:'rgba(20,184,166,.08)',  pointRadius:0,borderWidth:2,tension:.2,fill:false},
+  ];
+
+  // Holdout actuals: always shown, but in forecast-only mode use bolder styling
+  const holdoutDataset = {
+    label:'Holdout (actual)',
+    data:holdout,
+    borderColor:'#ef4444',
+    backgroundColor:'rgba(239,68,68,.08)',
+    pointRadius: forecastOnly ? 4 : 2,
+    pointHoverRadius: forecastOnly ? 6 : 4,
+    borderWidth: forecastOnly ? 2.5 : 2,
+    tension:.2,
+    fill:false
+  };
+
+  // Selected model forecast line — bolder in forecast-only mode
+  const forecastDataset = {
+    label:`Selected Forecast${selectedModel?` · ${selectedModel}`:''}`,
+    data:modelFc,
+    borderColor:getPrepModelColor(selectedModel||'selected',true),
+    backgroundColor:'rgba(139,92,246,.08)',
+    pointRadius:0,
+    borderWidth: forecastOnly ? 2.5 : 1.5,
+    borderDash:[8,5],
+    tension:.2,
+    fill:false
+  };
+
+  // Future forecast (the true unknown horizon): emphasised in forecast-only mode
+  const futureDataset = {
+    label:`Future Forecast${selectedModel?` · ${selectedModel}`:''}`,
+    data:futFc,
+    borderColor:getPrepModelColor(selectedModel||'future',true),
+    backgroundColor:'rgba(124,58,237,.08)',
+    pointRadius: forecastOnly ? 3 : 0,
+    pointHoverRadius: forecastOnly ? 5 : 3,
+    borderWidth: forecastOnly ? 3 : 2.5,
+    tension:.2,
+    fill:false
+  };
+
+  // CI band
+  const ciLower = {label:`95% Lower${selectedModel?` · ${selectedModel}`:''}`,data:futLo,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:false};
+  const ciUpper = {label:`95% Upper${selectedModel?` · ${selectedModel}`:''}`,data:futHi,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:'-1',backgroundColor:'rgba(139,92,246,.12)'};
+
+  // Compare model lines — in forecast-only mode also sliced
+  const compareDatasets=compareModels.map(name=>{
+    const rawFp=(modelOutputs[name]||{}).forecast_path||[];
+    const fp = forecastOnly ? rawFp.slice(sliceStart) : rawFp;
+    return {
+      label:`Compare · ${name}`,
+      data:fp,
+      borderColor:getPrepModelColor(name,false),
+      backgroundColor:'transparent',
+      pointRadius: forecastOnly ? 2 : 0,
+      pointHoverRadius: forecastOnly ? 4 : 2,
+      borderWidth: forecastOnly ? 1.8 : 1.3,
+      borderDash:[4,4],
+      tension:.2,
+      fill:false
+    };
+  });
+
+  // Vertical line at holdout start (hide in forecast-only — it's always the left edge)
+  const holdoutLineDatasets = (!forecastOnly && holdoutStart) ? [{
+    label:'Holdout start',
+    data:[{x:holdoutStart,y:ymin},{x:holdoutStart,y:ymax}],
+    parsing:false,
+    borderColor:'rgba(239,68,68,.75)',
+    pointRadius:0,borderWidth:1,borderDash:[3,3],showLine:true
+  }] : [];
+
+  // Vertical line at horizon start
+  const horizonLineDatasets = horizonStart ? [{
+    label:'Horizon start',
+    data:[{x:horizonStart,y:ymin},{x:horizonStart,y:ymax}],
+    parsing:false,
+    borderColor:'rgba(139,92,246,.9)',
+    pointRadius:0,borderWidth:1.3,borderDash:[2,2],showLine:true
+  }] : [];
+
   S.charts['prep-timeline-chart']=new Chart(ctx,{
     type:'line',
     data:{
       labels,
       datasets:[
+        // Historical scatter dots (hidden in forecast-only when not holdout)
         {
           label:'Historical Observations',
           type:'scatter',
-          data:histScatter,
+          data: forecastOnly ? histScatter.filter(pt=>allSplitLabels[allLabels.indexOf(pt.x)]==='holdout') : histScatter,
           parsing:false,
-          pointRadius:3,
-          pointHoverRadius:4,
+          pointRadius: forecastOnly ? 5 : 3,
+          pointHoverRadius: forecastOnly ? 7 : 4,
           pointBackgroundColor:histScatterColors,
           pointBorderColor:'#0f172a',
           pointBorderWidth:0.8,
           showLine:false
         },
-        {label:'Train',data:train,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
-        {label:'Validation',data:validation,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
-        {label:'Test',data:test,borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,.08)',pointRadius:0,borderWidth:2,tension:.2,fill:false},
-        {label:'Holdout (actual)',data:holdout,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.08)',pointRadius:2,borderWidth:2,tension:.2,fill:false},
-        {label:`Selected Forecast${selectedModel?` · ${selectedModel}`:''}`,data:modelFc,borderColor:getPrepModelColor(selectedModel||'selected',true),backgroundColor:'rgba(139,92,246,.08)',pointRadius:0,borderWidth:1.5,borderDash:[8,5],tension:.2,fill:false},
-        {label:`95% Lower${selectedModel?` · ${selectedModel}`:''}`,data:futLo,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:false},
-        {label:`95% Upper${selectedModel?` · ${selectedModel}`:''}`,data:futHi,borderColor:'rgba(139,92,246,.25)',pointRadius:0,borderWidth:1,tension:.2,fill:'-1',backgroundColor:'rgba(139,92,246,.12)'},
-        {label:`Future Forecast${selectedModel?` · ${selectedModel}`:''}`,data:futFc,borderColor:getPrepModelColor(selectedModel||'future',true),backgroundColor:'rgba(124,58,237,.08)',pointRadius:0,borderWidth:2.5,tension:.2,fill:false},
-        ...compareModels.map(name=>({
-          label:`Compare · ${name}`,
-          data:(modelOutputs[name]||{}).forecast_path||[],
-          borderColor:getPrepModelColor(name,false),
-          backgroundColor:'transparent',
-          pointRadius:0,
-          borderWidth:1.3,
-          borderDash:[4,4],
-          tension:.2,
-          fill:false
-        })),
-        ...(holdoutStart ? [{
-          label:'Holdout start',
-          data:[{x:holdoutStart,y:ymin},{x:holdoutStart,y:ymax}],
-          parsing:false,
-          borderColor:'rgba(239,68,68,.75)',
-          pointRadius:0,
-          borderWidth:1,
-          borderDash:[3,3],
-          showLine:true
-        }] : []),
-        ...(horizonStart ? [{
-          label:'Horizon start',
-          data:[{x:horizonStart,y:ymin},{x:horizonStart,y:ymax}],
-          parsing:false,
-          borderColor:'rgba(139,92,246,.9)',
-          pointRadius:0,
-          borderWidth:1.3,
-          borderDash:[2,2],
-          showLine:true
-        }] : []),
+        ...historicalDatasets,
+        holdoutDataset,
+        forecastDataset,
+        ciLower,
+        ciUpper,
+        futureDataset,
+        ...compareDatasets,
+        ...holdoutLineDatasets,
+        ...horizonLineDatasets,
       ]
     },
     options:{
       responsive:true,
       animation:{duration:350},
       plugins:{
-        legend:{display:true,labels:{color:'#8faec8',boxWidth:12,font:{size:11}}},
+        legend:{
+          display:true,
+          labels:{
+            color:'#8faec8',
+            boxWidth:12,
+            font:{size:11},
+            // In forecast-only mode hide the train/val/test legend items
+            filter: forecastOnly
+              ? (item)=>!['Train','Validation','Test','Historical Observations'].includes(item.text)
+              : undefined
+          }
+        },
         tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(12,16,25,.9)',titleColor:'#e8f0fe',bodyColor:'#8faec8',borderColor:'rgba(59,130,246,.3)',borderWidth:1}
       },
       scales:{
-        x:{ticks:{color:'#3d5a7a',maxTicksLimit:10,font:{family:'IBM Plex Mono',size:10}},grid:{color:'rgba(31,45,66,.5)'}},
-        y:{ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}},grid:{color:'rgba(31,45,66,.5)'}}
+        x:{
+          ticks:{color:'#3d5a7a',maxTicksLimit: forecastOnly ? 8 : 10,font:{family:'IBM Plex Mono',size:10}},
+          grid:{color:'rgba(31,45,66,.5)'}
+        },
+        y:{
+          min: forecastOnly ? ymin : undefined,
+          max: forecastOnly ? ymax : undefined,
+          ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}},
+          grid:{color:'rgba(31,45,66,.5)'}
+        }
       }
     }
   });
 
   const metaParts=[];
-  if(selectedModel) metaParts.push(`Selected model: ${selectedModel}`);
+  if(forecastOnly) metaParts.push('🔭 Forecast-only view');
+  if(selectedModel) metaParts.push(`Selected: ${selectedModel}`);
   if(compareModels.length) metaParts.push(`Comparing: ${compareModels.join(', ')}`);
-  if(holdoutStart) metaParts.push(`Holdout start: ${holdoutStart}`);
+  if(!forecastOnly && holdoutStart) metaParts.push(`Holdout start: ${holdoutStart}`);
   if(horizonStart) metaParts.push(`Horizon start: ${horizonStart}`);
-  if(timeline.horizon_n!=null) metaParts.push(`Horizon periods: ${timeline.horizon_n}`);
+  if(timeline.horizon_n!=null) metaParts.push(`Horizon: ${timeline.horizon_n} periods`);
   if(timeline.confidence_level!=null) metaParts.push(`CI: ${Math.round(timeline.confidence_level*100)}%`);
+  if(forecastOnly && sliceStart > 0) metaParts.push(`(${sliceStart} history pts hidden)`);
   setHtml('prep-timeline-meta',metaParts.join(' · '));
 }
 
