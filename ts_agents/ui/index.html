@@ -28,6 +28,7 @@ header{position:relative;z-index:10;background:rgba(12,16,25,.95);backdrop-filte
 .chip-green{color:var(--a3);border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.07)}
 .chip-amber{color:var(--a2);border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.07)}
 .chip-violet{color:var(--a4);border-color:rgba(139,92,246,.3);background:rgba(139,92,246,.07)}
+.chip-teal{color:var(--a3);border-color:rgba(20,184,166,.4);background:rgba(20,184,166,.1)}
 
 /* TABS */
 .tabs-wrapper{position:relative;z-index:9;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;padding:0 28px;gap:2px}
@@ -906,6 +907,10 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
         <label class="toggle"><input type="checkbox" id="prep-neg-allowed"><span class="toggle-slider"></span></label>
         <span>Negative Forecast Allowed</span>
       </div>
+      <div class="toggle-group" style="margin-top:4px">
+        <label class="toggle"><input type="checkbox" id="prep-combo-models"><span class="toggle-slider"></span></label>
+        <span>Combination Models (SimpleAvg, WeightedAvg, Median, BestTrio)</span>
+      </div>
       <div class="form-group" style="margin-top:10px">
         <label class="form-label">Export Format</label>
         <div class="radio-pills">
@@ -1116,12 +1121,13 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 // ════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════
-const API = "https://goldfish-app-avb6e.ondigitalocean.app";
-// const API = 'http://0.0.0.0:8080';
+//const API = "https://goldfish-app-avb6e.ondigitalocean.app";
+ const API = 'http://127.0.0.1:8080';
 const S = {
   token: null, filename: null, uploadMeta: null,
   valueCols: [], hierCols: [], isHierarchy: false,
   varRoles: {}, depCols: [], indepCols: [], eventCols: [],
+  detectedFreq: null,
   targetFreq: null, downloadToken: null, downloadExt: 'csv',
   forecastDownloadToken: null, forecastDownloadExt: 'xlsx',
   prepResult: null, prepSelectedModel: null, prepCompareModels: [],
@@ -1325,6 +1331,7 @@ async function confirmSchema() {
 
 function renderSchemaResult(r,tsCol,valCols,hierCols){
   hide('schema-confirm-card');
+  S.detectedFreq=r.schema.detected_freq||null;
   const dep=(r.dependent_cols||S.depCols||[]);
   const indep=(r.independent_cols||S.indepCols||[]);
   const evts=(r.event_cols||S.eventCols||[]);
@@ -1905,7 +1912,16 @@ async function setPrepMode(mode){
 
 function setPrepIntervalMode(){
   const mode=document.getElementById('prep-interval-mode')?.value||'session';
+  const modeSel=document.getElementById('prep-interval-mode');
   const freqSel=document.getElementById('prep-target-freq');
+  const sessionFreq=S.targetFreq||S.detectedFreq;
+  const sessionOpt=modeSel?.querySelector('option[value="session"]');
+  if(sessionOpt){
+    sessionOpt.textContent=sessionFreq ? `Use Session Interval (${sessionFreq})` : 'Use Session Interval';
+  }
+  if(freqSel && sessionFreq && [...freqSel.options].some(opt=>opt.value===sessionFreq) && mode==='session'){
+    freqSel.value=sessionFreq;
+  }
   if(freqSel) freqSel.disabled = (mode!=='manual');
 }
 
@@ -2050,6 +2066,7 @@ async function runForecastPrep(){
       n_holdout:parseInt(document.getElementById('prep-holdout')?.value||'0',10),
       output_format:document.querySelector('input[name="prep-out-fmt"]:checked')?.value||'excel',
       allow_negative_forecast:document.getElementById('prep-neg-allowed')?.checked??false,
+      enable_combination_models:document.getElementById('prep-combo-models')?.checked??false,
     });
     renderForecastPrepResults(r);
     show('prep-results');
@@ -2189,18 +2206,21 @@ function renderPrepModelComparison(r){
   }
   const htmlRows=rows.map(row=>{
     const name=row.model||'—';
+    const isCombo=name.startsWith('Combo:');
     const available=(r.available_models||[]).includes(name);
     const compareActive=(S.prepCompareModels||[]).includes(name);
     const badges=[
       name===r.best_model?'<span class="chip chip-blue">Best</span>':'',
       name===recommendedCandidate?'<span class="chip chip-violet">Recommended Candidate</span>':'',
       name===selected?'<span class="chip chip-green">Selected</span>':'',
+      isCombo?'<span class="chip chip-teal">Combination</span>':'',
       !available?'<span class="chip chip-amber">No Plot</span>':''
     ].filter(Boolean).join(' ');
-    return `<tr>
+    const rowStyle=isCombo?'style="background:rgba(20,184,166,.05);border-left:2px solid rgba(20,184,166,.4)"':'';
+    return `<tr ${rowStyle}>
       <td>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <strong style="color:var(--tx)">${escapeHtml(name)}</strong>
+          <strong style="color:${isCombo?'var(--a3)':'var(--tx)'}">${escapeHtml(name)}</strong>
           ${badges}
         </div>
       </td>

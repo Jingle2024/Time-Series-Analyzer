@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -46,8 +47,9 @@ def _guess_timestamp_col(df: pd.DataFrame) -> str:
     # fall back: first column that parses as datetime
     for col in df.columns:
         try:
-            pd.to_datetime(df[col].iloc[:5])
-            return col
+            parsed = _parse_datetime_series(df[col].iloc[:10])
+            if float(parsed.notna().mean()) >= 0.8:
+                return col
         except Exception:
             pass
     raise ValueError(
@@ -70,6 +72,72 @@ def _guess_value_cols(df: pd.DataFrame, ts_col: str) -> List[str]:
 def _guess_hierarchy_cols(df: pd.DataFrame, ts_col: str, value_cols: List[str]) -> List[str]:
     excluded = {ts_col} | set(value_cols)
     return [c for c in df.columns if c not in excluded and df[c].dtype == object]
+
+
+_AMBIGUOUS_DATE_RE = re.compile(r"^\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s*$")
+
+
+def _looks_ambiguous_date_series(series: pd.Series) -> bool:
+    sample = series.dropna().astype(str).head(20)
+    if sample.empty:
+        return False
+    return bool(sample.map(lambda v: bool(_AMBIGUOUS_DATE_RE.match(v))).mean() >= 0.8)
+
+
+def _score_datetime_parse(parsed: pd.Series) -> tuple:
+    valid = parsed.dropna()
+    valid_n = int(valid.shape[0])
+    if valid_n == 0:
+        return (0, 0.0, 0, 0, 0)
+
+    uniq = pd.Series(valid).sort_values().drop_duplicates()
+    inferred = None
+    try:
+        inferred = pd.infer_freq(pd.DatetimeIndex(uniq))
+    except Exception:
+        inferred = None
+
+    dominant_gap_ratio = 0.0
+    if len(uniq) >= 3:
+        diffs = uniq.diff().dropna()
+        if len(diffs):
+            dominant_gap_ratio = float(diffs.value_counts(normalize=True).iloc[0])
+
+    month_start_count = 0
+    day_one_count = 0
+    if valid_n:
+        month_start_count = int((valid.dt.is_month_start).sum())
+        day_one_count = int((valid.dt.day == 1).sum())
+
+    # Higher is better. Prefer more successful parses, then a clean inferred
+    # frequency, then month-start alignment, then regular spacing.
+    return (
+        valid_n,
+        1 if inferred else 0,
+        month_start_count,
+        day_one_count,
+        dominant_gap_ratio,
+    )
+
+
+def _parse_datetime_series(series: pd.Series) -> pd.Series:
+    ambiguous = _looks_ambiguous_date_series(series)
+    candidates = []
+
+    parse_options = [None]
+    if ambiguous:
+        parse_options.extend([True, False])
+
+    for dayfirst in parse_options:
+        kwargs = {"errors": "coerce"}
+        if dayfirst is not None:
+            kwargs["dayfirst"] = dayfirst
+        parsed = pd.to_datetime(series, **kwargs)
+        candidates.append((_score_datetime_parse(parsed), dayfirst, parsed))
+
+    best_score, best_dayfirst, best_parsed = max(candidates, key=lambda item: item[0])
+    logger.info("Datetime parse selected dayfirst=%s score=%s", best_dayfirst, best_score)
+    return best_parsed
 
 
 # ── agent ─────────────────────────────────────────────────────────────────────
@@ -114,7 +182,7 @@ class IngestionAgent(BaseAgent):
         )
 
         # ── 3. parse & set datetime index ────────────────────────────────────
-        df[ts_col] = pd.to_datetime(df[ts_col])
+        df[ts_col] = _parse_datetime_series(df[ts_col])
         df = df.sort_values(ts_col).reset_index(drop=True)
         df = df.set_index(ts_col)
         df.index.name = "timestamp"
@@ -190,15 +258,16 @@ class IngestionAgent(BaseAgent):
     def _detect_freq(df: pd.DataFrame, hint: Optional[str], warnings: List[str]) -> str:
         if hint:
             return hint
+        idx = pd.DatetimeIndex(pd.Series(df.index).dropna().sort_values().drop_duplicates())
         try:
-            inferred = pd.infer_freq(df.index)
+            inferred = pd.infer_freq(idx)
             if inferred:
                 return inferred
         except Exception:
             pass
         # fallback: compute median gap
-        if len(df) >= 2:
-            gaps = df.index.to_series().diff().dropna()
+        if len(idx) >= 2:
+            gaps = pd.Series(idx).diff().dropna()
             median_gap = gaps.median()
             td = pd.Timedelta(median_gap)
             days = td.days

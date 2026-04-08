@@ -126,6 +126,19 @@ def _series_stats(s: pd.Series) -> dict:
 def _forecast_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, Optional[float]]:
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
+    if y_true.ndim != 1:
+        y_true = y_true.reshape(-1)
+    if y_pred.ndim != 1:
+        y_pred = y_pred.reshape(-1)
+    if y_true.size == 0 or y_pred.size == 0:
+        return {"mae": None, "rmse": None, "mape": None}
+    if y_true.size != y_pred.size:
+        # Forecast fallbacks can be evaluated against an implicit holdout even when
+        # the UI timeline has no explicit holdout labels. Align on the overlapping
+        # tail instead of raising on shape mismatch.
+        n = min(y_true.size, y_pred.size)
+        y_true = y_true[-n:]
+        y_pred = y_pred[-n:]
     mask = np.isfinite(y_true) & np.isfinite(y_pred)
     if not mask.any():
         return {"mae": None, "rmse": None, "mape": None}
@@ -1429,6 +1442,40 @@ if _HAS_FASTAPI:
                 if isinstance(candidate, pd.DataFrame):
                     return candidate
         return None
+
+    def _hierarchy_session_frame(sess: Dict[str, Any]) -> Optional[pd.DataFrame]:
+        raw_df = sess.get("df")
+        if not isinstance(raw_df, pd.DataFrame):
+            return None
+
+        hier_cols = [c for c in sess.get("hierarchy_cols", []) if c in raw_df.columns]
+        if not hier_cols:
+            return _first_session_frame(sess) or raw_df
+
+        for key in ("treated_df", "imputed_df", "accumulated_df", "df"):
+            candidate = sess.get(key)
+            if isinstance(candidate, pd.DataFrame) and all(col in candidate.columns for col in hier_cols):
+                return candidate
+
+        # Treated/imputed frames currently drop hierarchy columns. When they still
+        # align 1:1 with the raw frame, stitch the numeric values back onto the
+        # raw hierarchy keys so hierarchy mode can still respect session cleanup.
+        for key in ("treated_df", "imputed_df"):
+            candidate = sess.get(key)
+            if not isinstance(candidate, pd.DataFrame):
+                continue
+            if len(candidate) != len(raw_df) or not candidate.index.equals(raw_df.index):
+                continue
+
+            merged = raw_df.copy()
+            overlay_cols = [c for c in candidate.columns if c in merged.columns and c not in hier_cols]
+            if not overlay_cols:
+                continue
+            merged.loc[:, overlay_cols] = candidate.loc[:, overlay_cols].to_numpy()
+            return merged
+
+        return raw_df
+
     @app.post("/api/prepare")
     async def prepare(body: PrepareReq):
         sess = _sessions.get(body.token)
@@ -1616,6 +1663,7 @@ if _HAS_FASTAPI:
         rvfl_n_hidden:        int   = 64           # RVFL: number of random hidden nodes
         rvfl_activation:      str   = "sigmoid"    # RVFL: sigmoid | relu | tanh | sin
         run_all_flann_variants: bool = False        # run all 3 variants and compare
+        enable_combination_models: bool = False
         allow_negative_forecast: bool = False
 
     @app.post("/api/forecast-prepare")
@@ -1624,7 +1672,15 @@ if _HAS_FASTAPI:
         if not sess or "df" not in sess:
             raise HTTPException(404, "Session not found")
 
-        work_df = _first_session_frame(sess)
+        hier_cols = sess.get("hierarchy_cols", [])
+        mode = body.mode if body.mode in ("single", "hierarchy") else "single"
+        node_path = {k: str(v) for k, v in (body.node_path or {}).items() if v is not None and str(v) != ""}
+
+        if mode == "hierarchy":
+            work_df = _hierarchy_session_frame(sess)
+        else:
+            work_df = _first_session_frame(sess)
+
         if work_df is None or not isinstance(work_df, pd.DataFrame):
             raise HTTPException(400, "No prepared frame available in session")
 
@@ -1635,10 +1691,6 @@ if _HAS_FASTAPI:
 
         indep_cols = [c for c in sess.get("independent_cols", []) if c in work_df.columns]
         event_cols = [c for c in sess.get("event_cols", []) if c in work_df.columns]
-        hier_cols = sess.get("hierarchy_cols", [])
-
-        mode = body.mode if body.mode in ("single", "hierarchy") else "single"
-        node_path = {k: str(v) for k, v in (body.node_path or {}).items() if v is not None and str(v) != ""}
 
         source_df = work_df
         if mode == "hierarchy":
@@ -1995,10 +2047,43 @@ if _HAS_FASTAPI:
                 if _HAS_STATSMODELS and ExponentialSmoothing is not None:
                     p = int(period_used) if period_used else 0
                     seasonal = "add" if (p > 1 and len(y_train) >= (2 * p)) else None
-                    ets_fit = ExponentialSmoothing(y_train, trend="add", seasonal=seasonal, seasonal_periods=(p if seasonal else None)).fit(optimized=True)
-                    yhat_test = np.asarray(ets_fit.forecast(holdout_n), dtype=float)
-                    ets_full = ExponentialSmoothing(y_full, trend="add", seasonal=seasonal, seasonal_periods=(p if seasonal else None)).fit(optimized=True)
-                    yhat_future = np.asarray(ets_full.forecast(future_n), dtype=float)
+                    sp = p if seasonal else None
+
+                    def _fit_ets(y, n_steps):
+                        """Fit ETS with MLE; fall back to fixed params if MLE diverges."""
+                        import warnings as _w
+                        model = ExponentialSmoothing(
+                            y, trend="add", seasonal=seasonal, seasonal_periods=sp
+                        )
+                        # Guard: degenerate series (constant or all-zero) → fixed params
+                        if float(np.std(y)) < 1e-8:
+                            with _w.catch_warnings():
+                                _w.simplefilter("ignore")
+                                with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+                                    fit = model.fit(optimized=False, smoothing_level=0.1,
+                                                    smoothing_trend=0.01,
+                                                    smoothing_seasonal=0.01 if seasonal else None)
+                        else:
+                            try:
+                                with _w.catch_warnings():
+                                    _w.simplefilter("ignore")
+                                    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+                                        fit = model.fit(optimized=True)
+                                # Reject fit if it produced non-finite parameters
+                                if not np.all(np.isfinite(fit.params.values()
+                                              if hasattr(fit.params, "values") else list(fit.params))):
+                                    raise ValueError("non-finite ETS params")
+                            except Exception:
+                                with _w.catch_warnings():
+                                    _w.simplefilter("ignore")
+                                    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+                                        fit = model.fit(optimized=False, smoothing_level=0.3,
+                                                        smoothing_trend=0.05,
+                                                        smoothing_seasonal=0.05 if seasonal else None)
+                        return np.asarray(fit.forecast(n_steps), dtype=float)
+
+                    yhat_test   = _fit_ets(y_train, holdout_n)
+                    yhat_future = _fit_ets(y_full,  future_n)
                     _register_model("ETS", yhat_test, yhat_future)
                 else:
                     _register_model("ETS", None, None, "statsmodels unavailable")
@@ -2191,6 +2276,64 @@ if _HAS_FASTAPI:
                         )
                 except Exception as _e:
                     _register_model(_model_label, None, None, str(_e))
+
+            if body.enable_combination_models:
+                # Collect individual models that have both valid holdout and future preds.
+                _exp_holdout_len = len(y_test)
+                _exp_future_len = future_n
+                print(f"Expected holdout length: {_exp_holdout_len}, future length: {_exp_future_len}")
+                _combo_pool = {
+                    name: pred
+                    for name, pred in model_predictions.items()
+                    if (
+                        pred.get("metrics", {}).get("mape") is not None
+                        and len(pred.get("holdout_pred") or []) == _exp_holdout_len
+                        and len(pred.get("future_pred") or []) == _exp_future_len
+                    )
+                }
+                print(f"Models eligible for combination: {list(_combo_pool.keys())}")
+                if len(_combo_pool) >= 2:
+                    _cnames = list(_combo_pool.keys())
+                    _h_mat = np.array([_combo_pool[n]["holdout_pred"] for n in _cnames], dtype=float)
+                    _f_mat = np.array([_combo_pool[n]["future_pred"] for n in _cnames], dtype=float)
+                    _mapes_arr = np.array([_combo_pool[n]["metrics"]["mape"] for n in _cnames], dtype=float)
+
+                    # 1. Simple Average — equal-weight blend of all eligible models.
+                    _register_model(
+                        "Combo:SimpleAvg",
+                        np.mean(_h_mat, axis=0),
+                        np.mean(_f_mat, axis=0),
+                    )
+                    print("Registered Combo:SimpleAvg")
+                    # 2. Inverse-MAPE Weighted Average — better models get higher weight.
+                    _safe_mapes = np.where(_mapes_arr > 0, _mapes_arr, 1e-9)
+                    _inv_w = 1.0 / _safe_mapes
+                    _inv_w = _inv_w / _inv_w.sum()
+                    _register_model(
+                        "Combo:WeightedAvg",
+                        (_inv_w[:, None] * _h_mat).sum(axis=0),
+                        (_inv_w[:, None] * _f_mat).sum(axis=0),
+                    )
+                    print("Registered Combo:WeightedAvg")
+                    # 3. Median Ensemble — robust to a single model being an outlier.
+                    _register_model(
+                        "Combo:Median",
+                        np.median(_h_mat, axis=0),
+                        np.median(_f_mat, axis=0),
+                    )
+                    print("Registered Combo:Median")
+                    # 4. BestTrio — simple average of the 3 lowest-MAPE individual models.
+                    _n_trio = min(3, len(_cnames))
+                    if _n_trio >= 2:
+                        _top_idx = np.argsort(_mapes_arr)[:_n_trio]
+                        _register_model(
+                            f"Combo:Top{_n_trio}Avg",
+                            np.mean(_h_mat[_top_idx], axis=0),
+                            np.mean(_f_mat[_top_idx], axis=0),
+                        )
+                        print(f"Registered Combo:Top{_n_trio}Avg")
+            # ─────────────────────────────────────────────────────────────────────
+
         # Timeline with split-aware actuals and a baseline model forecast overlay.
         obs_idx = list(feature_df.index)
         fut_idx = list(future_df.index)
@@ -2229,7 +2372,7 @@ if _HAS_FASTAPI:
             recommended_candidate if recommended_candidate in model_predictions else None
         )
 
-        if len(forecast_targets) and selected_model_name is None and non_holdout_vals:
+        if (len(y_test) + future_n) and selected_model_name is None and non_holdout_vals:
             last = float(non_holdout_vals[-1])
             drift = 0.0
             if len(non_holdout_vals) > 1 and Ft > 0.5:
@@ -2243,14 +2386,16 @@ if _HAS_FASTAPI:
 
             baseline_holdout: List[float] = []
             baseline_future: List[float] = []
-            for i, _dt in enumerate(forecast_targets):
+            baseline_holdout_n = int(len(y_test))
+            baseline_total_n = baseline_holdout_n + int(future_n)
+            for i in range(baseline_total_n):
                 pred = last + drift * (i + 1)
                 if season_template is not None and len(season_template):
                     pred += float(season_template[i % len(season_template)])
                 if min(non_holdout_vals) >= 0:
                     pred = max(0.0, pred)
                 pred = float(round(pred, 6))
-                if i < len(holdout_targets):
+                if i < baseline_holdout_n:
                     baseline_holdout.append(pred)
                 else:
                     baseline_future.append(pred)
