@@ -2798,12 +2798,14 @@ async function initStabilityTab() {
   if (!S.token) { show('stab-no-data'); hide('stab-ready'); return; }
   hide('stab-no-data'); show('stab-ready');
 
-  if (S.isHierarchy && (!S.hierTree || !S.hierLevels || !S.hierLevels.length)) {
+  if (S.isHierarchy && ((!S.hierTree && !S.hierTreeDeferred) || !S.hierLevels || !S.hierLevels.length)) {
     try {
       const r = await api('/api/hierarchy-tree', { token: S.token });
       S.hierTree = r.tree;
       S.hierLevels = r.levels;
       S.hierLevelValues = r.level_values;
+      S.hierTreeDeferred = !!r.tree_deferred;
+      S.hierChildCache = {};
     } catch (e) {
       toast(`Hierarchy tree unavailable: ${e.message}`, 'err');
     }
@@ -2812,7 +2814,7 @@ async function initStabilityTab() {
   // Populate level selector — all hierarchy levels
   const levelSel = document.getElementById('stab-level-sel');
   if (levelSel) {
-    const levels = S.hierCols && S.hierCols.length ? S.hierCols : [];
+    const levels = S.hierLevels && S.hierLevels.length ? S.hierLevels : (S.hierCols || []);
     levelSel.innerHTML = levels.map(l => `<option value="${l}">${l}</option>`).join('');
     if (!levels.length) {
       levelSel.innerHTML = '<option value="">No hierarchy columns</option>';
@@ -2826,25 +2828,26 @@ async function initStabilityTab() {
     valSel.innerHTML = cols.map(c => `<option value="${c}">${c}</option>`).join('');
   }
 
-  onStabLevelChange();
+  await onStabLevelChange();
 }
 
-function onStabLevelChange() {
+async function onStabLevelChange() {
   const levelSel = document.getElementById('stab-level-sel');
   STAB.levelCol = levelSel?.value || null;
-  buildStabParentFilters();
+  await buildStabParentFilters();
 }
 
-function buildStabParentFilters() {
+async function buildStabParentFilters() {
   const container = document.getElementById('stab-parent-filters');
   if (!container) return;
   container.innerHTML = '';
   STAB.parentPath = {};
-  if (!STAB.levelCol || !S.hierCols) return;
+  const levels = S.hierLevels && S.hierLevels.length ? S.hierLevels : (S.hierCols || []);
+  if (!STAB.levelCol || !levels.length) return;
 
   // Show filters for all hierarchy levels ABOVE the selected level
-  const idx = S.hierCols.indexOf(STAB.levelCol);
-  const parentLevels = S.hierCols.slice(0, idx);
+  const idx = levels.indexOf(STAB.levelCol);
+  const parentLevels = idx > 0 ? levels.slice(0, idx) : [];
 
   parentLevels.forEach((lvl, i) => {
     const wrap = document.createElement('div');
@@ -2860,17 +2863,18 @@ function buildStabParentFilters() {
     wrap.appendChild(sel);
     container.appendChild(wrap);
   });
-  syncStabParentPath(-1);
+  await syncStabParentPath(-1);
 }
 
-function populateStabParentSelect(levelIdx, currentPath) {
-  const lvl = (S.hierCols || [])[levelIdx];
+async function populateStabParentSelect(levelIdx, currentPath) {
+  const levels = S.hierLevels && S.hierLevels.length ? S.hierLevels : (S.hierCols || []);
+  const lvl = levels[levelIdx];
   const sel = document.getElementById(`stab-parent-${levelIdx}`);
   if (!lvl || !sel) return;
   const prev = sel.value;
   sel.innerHTML = '<option value="">All</option>';
   const vals = levelIdx > 0
-    ? getChildValues(currentPath, levelIdx)
+    ? await fetchChildValues(currentPath, levelIdx)
     : (S.hierLevelValues?.[lvl] || []);
   vals.forEach(v => {
     const o = document.createElement('option');
@@ -2881,22 +2885,24 @@ function populateStabParentSelect(levelIdx, currentPath) {
   if (prev && vals.includes(prev)) sel.value = prev;
 }
 
-function syncStabParentPath(changedIdx = -1) {
+async function syncStabParentPath(changedIdx = -1) {
   STAB.parentPath = {};
-  const idx = S.hierCols?.indexOf(STAB.levelCol) ?? -1;
-  const parentLevels = S.hierCols?.slice(0, idx) || [];
-  parentLevels.forEach((lvl, i) => {
+  const levels = S.hierLevels && S.hierLevels.length ? S.hierLevels : (S.hierCols || []);
+  const idx = levels.indexOf(STAB.levelCol);
+  const parentLevels = idx > 0 ? levels.slice(0, idx) : [];
+  for (let i = 0; i < parentLevels.length; i++) {
+    const lvl = parentLevels[i];
     const sel = document.getElementById(`stab-parent-${i}`);
-    if (!sel) return;
+    if (!sel) continue;
     if (changedIdx >= 0 && i > changedIdx) {
       sel.value = '';
       sel.disabled = true;
     }
-    populateStabParentSelect(i, STAB.parentPath);
+    await populateStabParentSelect(i, STAB.parentPath);
     if (sel.value) STAB.parentPath[lvl] = sel.value;
     const next = document.getElementById(`stab-parent-${i + 1}`);
     if (next) next.disabled = !sel.value;
-  });
+  }
 }
 
 function selectStabInterval(interval, label) {
@@ -2909,7 +2915,7 @@ function selectStabInterval(interval, label) {
 
 async function runStabilityAnalysis() {
   if (!S.token || !STAB.levelCol) { toast('Select a hierarchy level first', 'err'); return; }
-  syncStabParentPath();
+  await syncStabParentPath();
   show('stab-loader'); hide('stab-results');
   document.getElementById('stab-loader-msg').textContent =
     `Computing ${STAB.intervalLabel} stability for level "${STAB.levelCol}"…`;
