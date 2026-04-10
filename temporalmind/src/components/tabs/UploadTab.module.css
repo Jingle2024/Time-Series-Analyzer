@@ -1,0 +1,13 @@
+.hintLabel {
+  font-size: 11px;
+  color: var(--tx3);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.hintCode {
+  font-size: 11px;
+  color: var(--tx2);
+  font-family: var(--font-mono);
+}
