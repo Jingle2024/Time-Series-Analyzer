@@ -1121,8 +1121,8 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 // ════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════
-const API = "https://goldfish-app-avb6e.ondigitalocean.app";
- //const API = 'http://127.0.0.1:8080';
+//const API = "https://goldfish-app-avb6e.ondigitalocean.app";
+const API = 'http://127.0.0.1:8080';
 const S = {
   token: null, filename: null, uploadMeta: null,
   valueCols: [], hierCols: [], isHierarchy: false,
@@ -1273,14 +1273,54 @@ function renderUploadResult(meta) {
   }
 }
 
+function normalizeSuggestedRole(role) {
+  if (role === 'value') return 'dependent';
+  return ['timestamp','dependent','independent','event','hierarchy','ignore'].includes(role) ? role : 'ignore';
+}
+
+function inferSuggestedRole(meta, col) {
+  const suggested = normalizeSuggestedRole((meta.suggested_roles || {})[col]);
+  if (suggested !== 'ignore') return suggested;
+  if ((meta.ts_candidates || []).includes(col)) return 'timestamp';
+  if ((meta.hierarchy_candidates || []).includes(col)) return 'hierarchy';
+  if ((meta.event_candidates || []).includes(col)) return 'event';
+  if ((meta.value_candidates || []).includes(col)) return 'dependent';
+  return 'ignore';
+}
+
 function buildColMapper(meta) {
-  const opts=`<option value="timestamp">⏱ Timestamp</option><option value="dependent">🎯 Dependent (target)</option><option value="independent">📈 Independent (exog.)</option><option value="event">⚡ Event (binary 0/1)</option><option value="hierarchy">🌲 Hierarchy</option><option value="ignore">— Ignore</option>`;
+  const optionDefs = [
+    ['timestamp', '⏱ Timestamp'],
+    ['dependent', '🎯 Dependent (target)'],
+    ['independent', '📈 Independent (exog.)'],
+    ['event', '⚡ Event (binary 0/1)'],
+    ['hierarchy', '🌲 Hierarchy'],
+    ['ignore', '— Ignore'],
+  ];
+  const varRoles = {};
+  const depCols = [];
+  const indepCols = [];
+  const eventCols = [];
   const rows=meta.columns.map(col=>{
-    let role='ignore';
-    if(meta.ts_candidates.includes(col)) role='timestamp';
-    else if(meta.value_candidates.includes(col)) role='value';
-    else if(meta.hierarchy_candidates.includes(col)) role='hierarchy';
-    const badge=role==='timestamp'?'<span class="td-tag tag-ts">timestamp</span>':role==='value'?'<span class="td-tag tag-value">value</span>':role==='hierarchy'?'<span class="td-tag tag-hier">hierarchy</span>':'<span class="td-tag tag-other">—</span>';
+    const role = inferSuggestedRole(meta, col);
+    varRoles[col] = role;
+    if (role === 'dependent') depCols.push(col);
+    else if (role === 'independent') indepCols.push(col);
+    else if (role === 'event') eventCols.push(col);
+    const badge=role==='timestamp'
+      ? '<span class="td-tag tag-ts">timestamp</span>'
+      : role==='dependent'
+        ? '<span class="td-tag tag-dep">dependent</span>'
+        : role==='independent'
+          ? '<span class="td-tag tag-indep">independent</span>'
+          : role==='event'
+            ? '<span class="td-tag tag-event">event</span>'
+            : role==='hierarchy'
+              ? '<span class="td-tag tag-hier">hierarchy</span>'
+              : '<span class="td-tag tag-other">—</span>';
+    const opts = optionDefs.map(([value, label]) =>
+      `<option value="${value}"${value===role?' selected':''}>${label}</option>`
+    ).join('');
     return `<div class="col-row">
       <div class="col-name" style="display:flex;gap:8px;align-items:center">${badge}<span style="color:var(--tx)">${col}</span><span style="color:var(--tx3);font-size:10px">${(meta.dtypes||{})[col]||''}</span></div>
       <span style="font-size:10px;color:var(--tx3);font-family:'IBM Plex Mono',monospace">${(meta.nunique||{})[col]||''} uniq</span>
@@ -1288,15 +1328,10 @@ function buildColMapper(meta) {
     </div>`;
   });
   setHtml('col-mapper-body',rows.join(''));
-  meta.columns.forEach(col=>{
-    const sel=document.getElementById(`col-role-${encodeColId(col)}`);
-    if(!sel) return;
-    let role=(meta.suggested_roles||{})[col]||'ignore';
-    if(role==='value') role='dependent'; // legacy
-    // make sure the option exists
-    const opts=[...sel.options].map(o=>o.value);
-    if(opts.includes(role)) sel.value=role;
-  });
+  S.varRoles = varRoles;
+  S.depCols = depCols;
+  S.indepCols = indepCols;
+  S.eventCols = eventCols;
 }
 
 function encodeColId(col) { return encodeURIComponent(col).replace(/%/g,'_P_'); }

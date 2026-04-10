@@ -87,15 +87,24 @@ def detect_event_columns(df: pd.DataFrame, numeric_cols: List[str]) -> List[str]
 
 def detect_hierarchy_columns(df: pd.DataFrame, excluded: set) -> List[str]:
     """Low-cardinality categorical columns."""
-    n = len(df)
     result = []
     for col in df.columns:
         if col in excluded:
             continue
-        if df[col].dtype == object or str(df[col].dtype).startswith("category"):
-            nu = df[col].nunique()
-            if nu < max(2, n * 0.30):
-                result.append(col)
+        series = df[col]
+        if not (
+            pd.api.types.is_object_dtype(series)
+            or pd.api.types.is_string_dtype(series)
+            or isinstance(series.dtype, pd.CategoricalDtype)
+        ):
+            continue
+        non_null = int(series.notna().sum())
+        if non_null == 0:
+            continue
+        nu = int(series.nunique(dropna=True))
+        max_unique = max(2, int(np.ceil(non_null * 0.30)))
+        if nu <= max_unique and nu < non_null:
+            result.append(col)
     return result
 
 
