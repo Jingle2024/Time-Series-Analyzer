@@ -40,7 +40,7 @@ async def download(token: str, ext: str = "csv"):
 
 @router.get("/", response_class=HTMLResponse)
 async def root():
-    base_dir = Path(__file__).resolve().parents[2]   # project root (two levels up from routes/)
+    base_dir = Path(__file__).resolve().parents[1]   # project root (two levels up from routes/)
     candidate_paths = [
         base_dir / "ui" / "index.html",
         base_dir / "index.html",
