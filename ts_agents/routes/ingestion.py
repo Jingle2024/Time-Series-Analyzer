@@ -181,6 +181,7 @@ async def confirm_schema(body: SchemaConfirm):
     sess["schema"]          = result.metadata
     sess["value_cols"]      = body.value_cols
     sess["hierarchy_cols"]  = body.hierarchy_cols
+    sess["hierarchy_order"] = body.hierarchy_cols
     sess["detected_freq"]   = result.metadata["detected_freq"]
     sess["variable_roles"]  = roles
     sess["dependent_cols"]  = dep_cols or (body.value_cols[:1] if body.value_cols else [])
@@ -196,4 +197,5 @@ async def confirm_schema(body: SchemaConfirm):
         "dependent_cols":   dep_cols,
         "independent_cols": indep_cols,
         "event_cols":       event_cols,
+        "hierarchy_order":  body.hierarchy_cols,
     }

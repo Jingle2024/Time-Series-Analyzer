@@ -337,6 +337,10 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 .fc-only-card.fc-active{border-color:rgba(139,92,246,.4)!important;box-shadow:0 0 16px rgba(139,92,246,.08)}
 #fc-only-badge{display:none;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--a4);background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:4px;padding:2px 7px;vertical-align:middle;margin-left:6px}
 .fc-active #fc-only-badge{display:inline}
+/* Recon forecast-only badge (separate ID, same visual style) */
+#recon-fc-only-badge{display:none;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--a4);background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:4px;padding:2px 7px;vertical-align:middle;margin-left:6px}
+.recon-fc-active #recon-fc-only-badge{display:inline}
+#recon-chart{transition:height .25s ease;width:100%;display:block}
 #prep-timeline-chart{width:100%;display:block}
 #prep-timeline-container{position:relative;width:100%}
 
@@ -384,7 +388,8 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
   <button class="tab-btn" onclick="switchTab(1)" id="tab-1"><span class="tab-num">2</span>Time Series Analyzer</button>
   <button class="tab-btn" onclick="switchTab(2)" id="tab-2"><span class="tab-num">3</span>Cross-Correlation</button>
   <button class="tab-btn" onclick="switchTab(3)" id="tab-3"><span class="tab-num">4</span>Forecast Prep</button>
-  <button class="tab-btn" onclick="switchTab(4)" id="tab-4"><span class="tab-num">5</span>Level Stability</button></div>
+  <button class="tab-btn" onclick="switchTab(4)" id="tab-4"><span class="tab-num">5</span>Reconciled Forecast</button>
+  <button class="tab-btn" onclick="switchTab(5)" id="tab-5"><span class="tab-num">6</span>Level Stability</button></div>
 
 <main>
 
@@ -414,6 +419,13 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
         <div class="card-title">🗂 Column Mapping</div>
         <div id="schema-detect-msg" class="alert alert-warn" style="display:none"></div>
         <div id="col-mapper-body" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div id="hier-order-wrap" style="display:none;margin-top:16px">
+          <div class="card-title">Hierarchy Order</div>
+          <div style="font-size:12px;color:var(--tx2);margin-bottom:10px">
+            Reorder hierarchy columns from coarsest to finest before ingestion.
+          </div>
+          <div id="hier-order-body" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
         <div style="margin-top:16px;display:flex;gap:10px">
           <button class="btn btn-primary" onclick="confirmSchema()">✓ Confirm &amp; Ingest</button>
           <button class="btn btn-secondary" onclick="resetUpload()">↺ Reset</button>
@@ -974,8 +986,161 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
   </div>
 </div>
 <!-- END TAB 4 -->
-<!-- ═══════════════ TAB 5 — LEVEL STABILITY ═══════════════ -->
+<!-- TAB 5 — RECONCILED FORECAST -->
 <div class="tab-panel" id="panel-4">
+  <div class="section-h">Reconciled <em>Forecasting</em></div>
+  <p class="section-sub">
+    Forecast across the full hierarchy using explicit order from top to bottom, then reconcile with
+    Bottom-up, Top-down, or Middle-out logic and export forecasts for every level.
+  </p>
+
+  <div class="alert alert-info" id="recon-no-data">↑ Upload and confirm a hierarchical dataset in Tab 1 first.</div>
+
+  <div id="recon-ready" style="display:none">
+    <div class="card" style="margin-bottom:18px">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
+        <div class="form-group" style="flex:0 0 200px;margin:0">
+          <label class="form-label">Dependent Series</label>
+          <select class="form-control" id="recon-dep-col"></select>
+        </div>
+        <div class="form-group" style="flex:0 0 170px;margin:0">
+          <label class="form-label">Strategy</label>
+          <select class="form-control" id="recon-strategy" onchange="onReconStrategyChange()">
+            <option value="bottom_up">Bottom-up</option>
+            <option value="top_down">Top-down</option>
+            <option value="middle_out">Middle-out</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 180px;margin:0" id="recon-middle-wrap">
+          <label class="form-label">Middle Level</label>
+          <select class="form-control" id="recon-middle-level"></select>
+        </div>
+        <div class="form-group" style="flex:0 0 120px;margin:0">
+          <label class="form-label">Horizon</label>
+          <input type="number" class="form-control" id="recon-horizon" value="13" min="1">
+        </div>
+        <div class="form-group" style="flex:0 0 160px;margin:0">
+          <label class="form-label">Interval Mode</label>
+          <select class="form-control" id="recon-interval-mode" onchange="setReconIntervalMode()">
+            <option value="session">Use Session Interval</option>
+            <option value="manual">Manual Interval</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 150px;margin:0">
+          <label class="form-label">Manual Interval</label>
+          <select class="form-control" id="recon-target-freq" disabled>
+            <option value="D">Daily (D)</option>
+            <option value="W">Weekly (W)</option>
+            <option value="MS" selected>Monthly (MS)</option>
+            <option value="QS">Quarterly (QS)</option>
+            <option value="AS">Yearly (AS)</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 130px;margin:0">
+          <label class="form-label">Quantity Type</label>
+          <select class="form-control" id="recon-qty-type">
+            <option value="flow" selected>Flow</option>
+            <option value="stock">Stock</option>
+            <option value="rate">Rate</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 150px;margin:0">
+          <label class="form-label">Accumulation</label>
+          <select class="form-control" id="recon-accum-method">
+            <option value="auto" selected>Auto</option>
+            <option value="sum">Sum</option>
+            <option value="mean">Mean</option>
+            <option value="last">Last</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
+        <div style="font-size:12px;color:var(--tx2)" id="recon-hier-order-note"></div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="recon-neg-allowed"> Allow negative forecast</label>
+          <div class="radio-pills">
+            <div class="radio-pill"><input type="radio" name="recon-out-fmt" id="recon-out-excel" value="excel" checked><label for="recon-out-excel">Excel</label></div>
+            <div class="radio-pill"><input type="radio" name="recon-out-fmt" id="recon-out-csv" value="csv"><label for="recon-out-csv">CSV Bundle</label></div>
+          </div>
+          <button class="btn btn-primary" onclick="runReconciledForecast()">▶ Run Reconciled Forecast</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="recon-loader" style="display:none" class="loader-wrap">
+      <div class="spinner"></div><span class="loader-text" id="recon-loader-msg">Computing reconciled forecasts...</span>
+    </div>
+
+    <div id="recon-results" style="display:none">
+      <div class="grid-4" id="recon-stats-row" style="margin-bottom:16px"></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Preview Selector</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:0 0 180px;margin:0">
+            <label class="form-label">Level</label>
+            <select class="form-control" id="recon-level-select" onchange="onReconPreviewLevelChange()"></select>
+          </div>
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Node</label>
+            <select class="form-control" id="recon-node-select" onchange="renderReconSelectedNode()"></select>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="recon-tree-card" style="display:none;margin-bottom:16px">
+        <div class="card-title">Tree Browser</div>
+        <div class="vis-tree-toggle" onclick="toggleReconTree()" id="recon-tree-toggle-btn" style="padding:8px 0;border-top:none">
+          <span id="recon-tree-icon">▶</span>
+          <span>Browse forecast nodes as a tree</span>
+          <span style="margin-left:auto;font-size:10px" id="recon-tree-hint">click to expand</span>
+        </div>
+        <div class="vis-tree-wrap" id="recon-tree-wrap" style="display:none;max-height:320px;padding:6px 0 0 0">
+          <div id="recon-tree-root"></div>
+        </div>
+      </div>
+      <div class="card fc-only-card" id="recon-chart-card" style="margin-bottom:16px">
+        <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <span>Selected Node Timeline<span id="recon-fc-only-badge">FORECAST VIEW</span></span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="fc-only-toggle" id="recon-base-toggle-btn" title="Overlay the raw model forecast before hierarchy reconciliation" style="border-color:rgba(16,185,129,.35)">
+              <input type="checkbox" class="fc-chk" id="recon-base-chk" checked onchange="toggleReconBaseForecast(this.checked)">
+              <span style="color:var(--a3)">📊 Show Base Forecast</span>
+            </label>
+            <label class="fc-only-toggle" id="recon-fc-only-toggle-btn" title="Hide history and zoom into the forecast window only">
+              <input type="checkbox" class="fc-chk" id="recon-fc-only-chk" onchange="toggleReconForecastOnly(this.checked)">
+              <span>🔭 Show Forecast Only</span>
+            </label>
+          </div>
+        </div>
+        <div style="position:relative">
+          <canvas id="recon-chart" height="180"></canvas>
+        </div>
+        <div id="recon-chart-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Node Summary Preview</div>
+        <div class="tbl-wrap" id="recon-node-summary" style="max-height:260px;overflow:auto"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Future Forecast Preview</div>
+        <div class="tbl-wrap" id="recon-forecast-preview" style="max-height:260px;overflow:auto"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Reconciliation Report</div>
+        <pre id="recon-report" style="white-space:pre-wrap;color:var(--tx2);font-size:12px;line-height:1.45;margin:0"></pre>
+      </div>
+      <div class="card">
+        <div class="card-title">Export</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-download btn-lg" onclick="downloadReconciledForecast()">⬇ Download Reconciled Forecasts</button>
+          <span id="recon-export-info" style="font-size:12px;color:var(--tx2)"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- END TAB 5 -->
+<!-- ═══════════════ TAB 5 — LEVEL STABILITY ═══════════════ -->
+<div class="tab-panel" id="panel-5">
   <div class="section-h">Level <em>Stability Analysis</em></div>
   <p class="section-sub">
     Superimpose all series at a chosen hierarchy level. Analyse stability across time intervals —
@@ -1121,17 +1286,20 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 // ════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════
-const API = "https://goldfish-app-avb6e.ondigitalocean.app";
-//const API = 'http://127.0.0.1:8080';
+//const API = "https://goldfish-app-avb6e.ondigitalocean.app";
+const API = 'http://127.0.0.1:8080';
 const S = {
   token: null, filename: null, uploadMeta: null,
-  valueCols: [], hierCols: [], isHierarchy: false,
+  valueCols: [], hierCols: [], hierOrder: [], isHierarchy: false,
   varRoles: {}, depCols: [], indepCols: [], eventCols: [],
   detectedFreq: null,
   targetFreq: null, downloadToken: null, downloadExt: 'csv',
   forecastDownloadToken: null, forecastDownloadExt: 'xlsx',
+  reconDownloadToken: null, reconDownloadExt: 'xlsx', reconResult: null,
   prepResult: null, prepSelectedModel: null, prepCompareModels: [],
   prepForecastOnly: false,
+  reconForecastOnly: false,
+  reconShowBase: true,
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
   hierTreeDeferred: false, hierChildCache: {},
@@ -1223,14 +1391,15 @@ async function checkApiStatus() {
 // TABS
 // ════════════════════════════════════════════════════════════
 function switchTab(idx) {
-  [0,1,2,3,4].forEach(i=>{
+  [0,1,2,3,4,5].forEach(i=>{
     const tb=document.getElementById(`tab-${i}`); if(tb) tb.classList.toggle('active',i===idx);
     const pn=document.getElementById(`panel-${i}`); if(pn) pn.classList.toggle('active',i===idx);
   });
   if(idx===1) initAnalyzerTab();
   if(idx===2) initCCTab();
   if(idx===3) initPrepTab();
-  if(idx===4) initStabilityTab();
+  if(idx===4) initReconTab();
+  if(idx===5) initStabilityTab();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1332,13 +1501,56 @@ function buildColMapper(meta) {
   S.depCols = depCols;
   S.indepCols = indepCols;
   S.eventCols = eventCols;
+  S.hierOrder = meta.columns.filter(col => varRoles[col] === 'hierarchy');
+  meta.columns.forEach(col => {
+    const sel = document.getElementById(`col-role-${encodeColId(col)}`);
+    if(!sel) return;
+    sel.addEventListener('change', () => refreshHierarchyOrderEditor(meta.columns));
+  });
+  refreshHierarchyOrderEditor(meta.columns);
 }
 
 function encodeColId(col) { return encodeURIComponent(col).replace(/%/g,'_P_'); }
 
+function refreshHierarchyOrderEditor(cols) {
+  const wrap = document.getElementById('hier-order-wrap');
+  const body = document.getElementById('hier-order-body');
+  if(!wrap || !body) return;
+  const selected = (cols || S.uploadMeta?.columns || []).filter(col => {
+    const sel = document.getElementById(`col-role-${encodeColId(col)}`);
+    return sel && sel.value === 'hierarchy';
+  });
+  const kept = (S.hierOrder || []).filter(col => selected.includes(col));
+  const fresh = selected.filter(col => !kept.includes(col));
+  S.hierOrder = kept.concat(fresh);
+  wrap.style.display = S.hierOrder.length ? 'block' : 'none';
+  if(!S.hierOrder.length) {
+    body.innerHTML = '';
+    return;
+  }
+  body.innerHTML = S.hierOrder.map((col, idx) => `
+    <div class="info-row" style="align-items:center">
+      <span class="info-val" style="font-family:'IBM Plex Mono',monospace">${idx + 1}. ${escapeHtml(col)}</span>
+      <span style="display:flex;gap:8px">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="moveHierarchyCol(${idx},-1)" ${idx===0?'disabled':''}>Up</button>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="moveHierarchyCol(${idx},1)" ${idx===S.hierOrder.length-1?'disabled':''}>Down</button>
+      </span>
+    </div>
+  `).join('');
+}
+
+function moveHierarchyCol(idx, delta) {
+  const next = idx + delta;
+  if(next < 0 || next >= (S.hierOrder||[]).length) return;
+  const order = [...S.hierOrder];
+  [order[idx], order[next]] = [order[next], order[idx]];
+  S.hierOrder = order;
+  refreshHierarchyOrderEditor(S.uploadMeta?.columns || []);
+}
+
 async function confirmSchema() {
   const cols=S.uploadMeta.columns;
-  let tsCol=null,valCols=[],hierCols=[],depCols=[],indepCols=[],eventCols=[];
+  let tsCol=null,valCols=[],hierColsSelected=[],depCols=[],indepCols=[],eventCols=[];
   const varRoles={};
   cols.forEach(col=>{
     const sel=document.getElementById(`col-role-${encodeColId(col)}`);
@@ -1346,15 +1558,18 @@ async function confirmSchema() {
     const r=sel.value;
     varRoles[col]=r;
     if(r==='timestamp') tsCol=col;
-    else if(r==='hierarchy') hierCols.push(col);
+    else if(r==='hierarchy') hierColsSelected.push(col);
     else if(r==='dependent'){valCols.push(col);depCols.push(col);}
     else if(r==='independent'){valCols.push(col);indepCols.push(col);}
     else if(r==='event'){valCols.push(col);eventCols.push(col);}
   });
+  const hierCols=(S.hierOrder||[]).filter(col=>hierColsSelected.includes(col)).concat(
+    hierColsSelected.filter(col=>!(S.hierOrder||[]).includes(col))
+  );
   if(!tsCol){toast('Assign a Timestamp column','err');return;}
   if(!depCols.length&&!valCols.length){toast('Assign at least one Dependent column','err');return;}
   // store roles in state
-  S.varRoles=varRoles; S.depCols=depCols; S.indepCols=indepCols; S.eventCols=eventCols;
+  S.varRoles=varRoles; S.depCols=depCols; S.indepCols=indepCols; S.eventCols=eventCols; S.hierOrder=hierCols;
   toast('Ingesting…','info');
   try {
     const r=await api('/api/confirm-schema',{token:S.token,timestamp_col:tsCol,value_cols:valCols,hierarchy_cols:hierCols,variable_roles:varRoles});
@@ -1373,6 +1588,7 @@ function renderSchemaResult(r,tsCol,valCols,hierCols){
   // update state from server response
   S.depCols=dep; S.indepCols=indep; S.eventCols=evts;
   S.valueCols=dep.concat(indep).concat(evts);
+  S.hierOrder=(r.hierarchy_order||hierCols||[]).slice();
   const html=`<div class="grid-4" style="gap:8px">
     ${statCard(r.schema.n_rows,'Rows')}${statCard(r.schema.detected_freq,'Freq','','var(--a6)')}
     ${statCard(hierCols.length,'Hier Levels','',hierCols.length?'var(--a4)':'var(--tx3)')}
@@ -1393,6 +1609,7 @@ function renderSchemaResult(r,tsCol,valCols,hierCols){
 
 function resetUpload(){
   S.token=null; hide('schema-confirm-card'); hide('preview-card'); hide('schema-result-card');
+  S.hierOrder=[]; S.reconResult=null; S.reconDownloadToken=null;
   document.getElementById('file-input').value='';
   toast('Reset','info');
 }
@@ -2774,6 +2991,474 @@ function renderCCFCard(col, cd, r) {
 // INIT
 // ════════════════════════════════════════════════════════════
 checkApiStatus();
+
+const RECON = {
+  result: null,
+  selectedLevel: 'total',
+  selectedNodeId: null,
+  treeExpanded: false,
+};
+
+function initReconTab() {
+  if(!S.token || !S.isHierarchy || !(S.hierCols||[]).length){
+    show('recon-no-data'); hide('recon-ready'); return;
+  }
+  hide('recon-no-data'); show('recon-ready');
+  const depSel=document.getElementById('recon-dep-col');
+  if(depSel){
+    const dep=(S.depCols&&S.depCols.length?S.depCols:(S.valueCols||[]));
+    depSel.innerHTML=dep.map(c=>`<option value="${c}">${c}</option>`).join('');
+  }
+  const midSel=document.getElementById('recon-middle-level');
+  if(midSel){
+    const levels=S.hierLevels&&S.hierLevels.length?S.hierLevels:(S.hierCols||[]);
+    midSel.innerHTML=levels.map(l=>`<option value="${l}">${l}</option>`).join('');
+  }
+  const order=(S.hierOrder&&S.hierOrder.length?S.hierOrder:(S.hierLevels&&S.hierLevels.length?S.hierLevels:S.hierCols||[]));
+  setHtml('recon-hier-order-note', order.length ? `Hierarchy order: <strong style="color:var(--a4)">${order.map(escapeHtml).join(' → ')}</strong>` : '');
+  setReconIntervalMode();
+  onReconStrategyChange();
+}
+
+function onReconStrategyChange() {
+  const strategy=document.getElementById('recon-strategy')?.value || 'bottom_up';
+  const wrap=document.getElementById('recon-middle-wrap');
+  if(wrap) wrap.style.display = strategy==='middle_out' ? 'block' : 'none';
+}
+
+function setReconIntervalMode() {
+  const mode=document.getElementById('recon-interval-mode')?.value || 'session';
+  const sel=document.getElementById('recon-target-freq');
+  if(sel) sel.disabled = mode!=='manual';
+}
+
+async function runReconciledForecast() {
+  if(!S.token){toast('Upload a dataset first','err');return;}
+  const msg=document.getElementById('recon-loader-msg');
+  if(msg) msg.textContent='Computing reconciled forecasts...';
+  show('recon-loader'); hide('recon-results');
+  try {
+    const strategy=document.getElementById('recon-strategy')?.value || 'bottom_up';
+    const outFmt=document.querySelector('input[name="recon-out-fmt"]:checked')?.value || 'excel';
+    const r=await api('/api/reconciled-forecast',{
+      token:S.token,
+      dep_col:document.getElementById('recon-dep-col')?.value || null,
+      horizon:parseInt(document.getElementById('recon-horizon')?.value||'13',10),
+      strategy,
+      middle_level:strategy==='middle_out' ? (document.getElementById('recon-middle-level')?.value || null) : null,
+      interval_mode:document.getElementById('recon-interval-mode')?.value || 'session',
+      target_freq:document.getElementById('recon-target-freq')?.value || null,
+      quantity_type:document.getElementById('recon-qty-type')?.value || 'flow',
+      accumulation_method:document.getElementById('recon-accum-method')?.value || 'auto',
+      allow_negative_forecast:document.getElementById('recon-neg-allowed')?.checked || false,
+      output_format:outFmt,
+      max_nodes_preview:200,
+    });
+    S.reconResult=r;
+    S.reconDownloadToken=r.download_token||null;
+    S.reconDownloadExt=r.download_ext||'xlsx';
+    RECON.result=r;
+    RECON.selectedLevel='total';
+    RECON.selectedNodeId=r.default_node_id||null;
+    renderReconResults(r);
+    show('recon-results');
+    toast(`Reconciled forecast complete — ${r.n_total_nodes} nodes`,'ok');
+  } catch(e) {
+    toast(`Reconciled forecast failed: ${e.message}`,'err');
+  } finally {
+    hide('recon-loader');
+  }
+}
+
+function renderReconResults(r) {
+  setHtml('recon-stats-row',[
+    statCard(String(r.strategy||'').replace('_','-'),'Strategy','', 'var(--a1)'),
+    statCard(r.horizon,'Horizon',r.chosen_freq||'session','var(--a3)'),
+    statCard(r.n_total_nodes,'Nodes',r.preview_truncated?`${r.n_preview_nodes} previewed`:'all previewed','var(--a4)'),
+    statCard((r.hierarchy_order||[]).length,'Levels',(r.hierarchy_order||[]).join(' → '),'var(--a2)')
+  ].join(''));
+  setHtml('recon-node-summary', buildTable(r.node_summary_preview||[]));
+  setHtml('recon-forecast-preview', buildTable(r.forecast_preview||[]));
+  setHtml('recon-report', r.report||'');
+  setHtml('recon-export-info', `Ready: ${(S.reconDownloadExt||'').toUpperCase()} export`);
+  const treeCard=document.getElementById('recon-tree-card');
+  if(treeCard) treeCard.style.display = r.preview_truncated ? 'none' : 'block';
+  if(r.preview_truncated){
+    RECON.treeExpanded=false;
+  }
+  syncReconTreeVisibility();
+  if(!r.preview_truncated) buildReconTree();
+  populateReconLevelSelect();
+}
+
+function populateReconLevelSelect() {
+  const sel=document.getElementById('recon-level-select');
+  if(!sel || !RECON.result) return;
+  const levels=Object.keys(RECON.result.preview_level_nodes||{});
+  if(!levels.length){ sel.innerHTML=''; return; }
+  if(!levels.includes(RECON.selectedLevel)) RECON.selectedLevel=levels[0];
+  sel.innerHTML=levels.map(level=>`<option value="${level}" ${level===RECON.selectedLevel?'selected':''}>${level}</option>`).join('');
+  onReconPreviewLevelChange();
+}
+
+function onReconPreviewLevelChange() {
+  const level=document.getElementById('recon-level-select')?.value || 'total';
+  RECON.selectedLevel=level;
+  const nodeSel=document.getElementById('recon-node-select');
+  if(!nodeSel || !RECON.result) return;
+  const nodeIds=(RECON.result.preview_level_nodes||{})[level]||[];
+  const metaById={};
+  (RECON.result.preview_nodes||[]).forEach(n=>{ metaById[n.node_id]=n; });
+  if(!nodeIds.includes(RECON.selectedNodeId)) RECON.selectedNodeId=nodeIds[0]||null;
+  nodeSel.innerHTML=nodeIds.map(nodeId=>{
+    const meta=metaById[nodeId]||{};
+    const label=meta.display_path||meta.label||nodeId;
+    return `<option value="${nodeId}" ${nodeId===RECON.selectedNodeId?'selected':''}>${escapeHtml(label)}</option>`;
+  }).join('');
+  renderReconSelectedNode();
+}
+
+function toggleReconBaseForecast(checked) {
+  S.reconShowBase = !!checked;
+  const btn = document.getElementById('recon-base-toggle-btn');
+  if (btn) btn.classList.toggle('fc-active', S.reconShowBase);
+  renderReconSelectedNode();
+}
+
+function toggleReconForecastOnly(checked) {
+  S.reconForecastOnly = !!checked;
+  const btn  = document.getElementById('recon-fc-only-toggle-btn');
+  const card = document.getElementById('recon-chart-card');
+  const chk  = document.getElementById('recon-fc-only-chk');
+  if (btn)  btn.classList.toggle('fc-active', S.reconForecastOnly);
+  if (card) card.classList.toggle('recon-fc-active', S.reconForecastOnly);
+  if (chk && chk.checked !== S.reconForecastOnly) chk.checked = S.reconForecastOnly;
+  const canvas = document.getElementById('recon-chart');
+  if (canvas) canvas.setAttribute('height', S.reconForecastOnly ? '360' : '180');
+  renderReconSelectedNode();
+  toast(S.reconForecastOnly ? '🔭 Forecast-only view — history hidden' : '📈 Full timeline view restored', 'info', 2000);
+}
+
+function renderReconSelectedNode() {
+  if(!RECON.result) return;
+  const nodeId=document.getElementById('recon-node-select')?.value || RECON.selectedNodeId;
+  if(!nodeId) return;
+  RECON.selectedNodeId=nodeId;
+  const preview=(RECON.result.node_previews||{})[nodeId];
+  if(!preview){
+    destroyChart('recon-chart');
+    setHtml('recon-chart-meta','Selected node is not available in the preview payload. Use the export for the full hierarchy.');
+    return;
+  }
+  const meta=(RECON.result.preview_nodes||[]).find(n=>n.node_id===nodeId)||{};
+
+  const forecastOnly = !!S.reconForecastOnly;
+  const showBase     = !!S.reconShowBase;
+
+  // ── Raw arrays from payload ────────────────────────────────────────────────
+  const allLabels      = preview.labels        || [];
+  const allHistory     = preview.history       || [];
+  const allFuture      = preview.future        || [];   // reconciled forecast
+  const allBase        = preview.base_forecast || [];   // model forecast pre-reconciliation
+  const historyN       = preview.history_n     || 0;
+  const hasDivergence  = allBase.length > 0;
+
+  // ── Slice to forecast window when in forecast-only mode ───────────────────
+  // Keep one overlap point so lines visually connect to the history anchor
+  const sliceStart = forecastOnly ? Math.max(0, historyN - 1) : 0;
+  const labels     = allLabels.slice(sliceStart);
+  const history    = allHistory.slice(sliceStart);
+  const future     = allFuture.slice(sliceStart);       // reconciled
+  const baseFc     = allBase.slice(sliceStart);         // model (base)
+
+  // ── Y-axis range ──────────────────────────────────────────────────────────
+  let yMin, yMax;
+  if (forecastOnly) {
+    const candidates = [...future, ...(showBase && hasDivergence ? baseFc : []), ...history]
+      .filter(v => v != null && !isNaN(v));
+    if (candidates.length) {
+      const pad = (Math.max(...candidates) - Math.min(...candidates)) * 0.05 || Math.abs(Math.max(...candidates)) * 0.05 || 1;
+      yMin = Math.min(...candidates) - pad;
+      yMax = Math.max(...candidates) + pad;
+    }
+  }
+
+  // ── Compute divergence stats (how much did reconciliation change things?) ──
+  let divStats = null;
+  if (hasDivergence) {
+    // Compare only the future slots (non-null in both arrays)
+    const baseFutureVals = allBase.filter(v => v != null);
+    const reconFutureVals = allFuture.filter(v => v != null);
+    const n = Math.min(baseFutureVals.length, reconFutureVals.length);
+    if (n > 0) {
+      const diffs = Array.from({length: n}, (_, i) => reconFutureVals[i] - baseFutureVals[i]);
+      const baseSum   = baseFutureVals.slice(0, n).reduce((a, b) => a + b, 0);
+      const reconSum  = reconFutureVals.slice(0, n).reduce((a, b) => a + b, 0);
+      const meanDiff  = diffs.reduce((a, b) => a + b, 0) / n;
+      const maxAbsDiff = Math.max(...diffs.map(Math.abs));
+      const pctChange = baseSum !== 0 ? ((reconSum - baseSum) / Math.abs(baseSum)) * 100 : 0;
+      divStats = {
+        meanDiff: round4(meanDiff),
+        maxAbsDiff: round4(maxAbsDiff),
+        pctChange: round4(pctChange),
+        baseTotal: round4(baseSum),
+        reconTotal: round4(reconSum),
+      };
+    }
+  }
+
+  destroyChart('recon-chart');
+  const ctx = document.getElementById('recon-chart');
+  if (!ctx) return;
+
+  // ── Datasets ──────────────────────────────────────────────────────────────
+
+  // 1. History (actual observations)
+  const histDataset = {
+    label: 'History (actual)',
+    data: history,
+    borderColor: forecastOnly ? 'rgba(96,165,250,.3)' : '#60a5fa',
+    backgroundColor: 'transparent',
+    pointRadius: 0,
+    borderWidth: forecastOnly ? 1 : 1.8,
+    tension: .25,
+    fill: false,
+    borderDash: forecastOnly ? [4, 3] : [],
+    order: 3,
+  };
+
+  // 2. Base model forecast (pre-reconciliation) — green dashed
+  const baseDataset = {
+    label: 'Base Model Forecast',
+    data: baseFc,
+    borderColor: '#10b981',
+    backgroundColor: 'rgba(16,185,129,.07)',
+    pointRadius: forecastOnly ? 3 : 0,
+    pointHoverRadius: 5,
+    borderWidth: forecastOnly ? 2 : 1.8,
+    tension: .25,
+    fill: false,
+    borderDash: [6, 4],
+    order: 2,
+  };
+
+  // 3. Reconciled forecast — orange solid, bolder (the primary result)
+  const reconDataset = {
+    label: 'Reconciled Forecast',
+    data: future,
+    borderColor: '#f97316',
+    backgroundColor: 'rgba(249,115,22,.09)',
+    pointRadius: forecastOnly ? 4 : 2,
+    pointHoverRadius: 6,
+    borderWidth: forecastOnly ? 3 : 2.5,
+    tension: .25,
+    fill: false,
+    borderDash: [],
+    order: 1,
+  };
+
+  // Build dataset array — base only included when available and toggled on
+  const datasets = [
+    histDataset,
+    ...(hasDivergence && showBase ? [baseDataset] : []),
+    reconDataset,
+  ];
+
+  S.charts['recon-chart'] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: '#8faec8',
+            boxWidth: 14,
+            font: { size: 11 },
+            filter: forecastOnly
+              ? (item) => item.text !== 'History (actual)'
+              : undefined,
+          },
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: 'rgba(12,16,25,.95)',
+          titleColor: '#e8f0fe',
+          bodyColor: '#8faec8',
+          borderColor: 'rgba(59,130,246,.3)',
+          borderWidth: 1,
+          callbacks: {
+            // Add a "Δ Reconciliation adjustment" line when both series are visible
+            afterBody: (items) => {
+              if (!hasDivergence || !showBase) return [];
+              const baseItem  = items.find(i => i.dataset.label === 'Base Model Forecast');
+              const reconItem = items.find(i => i.dataset.label === 'Reconciled Forecast');
+              if (baseItem == null || reconItem == null) return [];
+              const bv = baseItem.raw;
+              const rv = reconItem.raw;
+              if (bv == null || rv == null || isNaN(bv) || isNaN(rv)) return [];
+              const diff = rv - bv;
+              const sign = diff >= 0 ? '+' : '';
+              const pct  = bv !== 0 ? ` (${sign}${((diff/Math.abs(bv))*100).toFixed(1)}%)` : '';
+              return [`Δ Reconciliation: ${sign}${diff.toFixed(2)}${pct}`];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#3d5a7a', maxTicksLimit: forecastOnly ? 8 : 10, font: { family: 'IBM Plex Mono', size: 10 } },
+          grid: { color: 'rgba(31,45,66,.5)' },
+        },
+        y: {
+          min: forecastOnly && yMin != null ? yMin : undefined,
+          max: forecastOnly && yMax != null ? yMax : undefined,
+          ticks: { color: '#3d5a7a', font: { family: 'IBM Plex Mono', size: 10 } },
+          grid: { color: 'rgba(31,45,66,.5)' },
+        },
+      },
+    },
+  });
+
+  // ── Meta row ──────────────────────────────────────────────────────────────
+  const trunc = RECON.result.preview_truncated ? ' Preview capped; export contains all nodes.' : '';
+  const metaParts = [
+    `<strong style="color:var(--tx)">${escapeHtml(meta.display_path || meta.label || nodeId)}</strong>`,
+    `Level: <span style="color:var(--a4)">${escapeHtml(meta.level_name || '')}</span>`,
+    forecastOnly
+      ? `🔭 Forecast-only · ${preview.future_n || 0} periods`
+      : `History: ${preview.history_n || 0} pts · Horizon: ${preview.future_n || 0} periods`,
+  ];
+  if (divStats && hasDivergence && showBase) {
+    const sign = divStats.pctChange >= 0 ? '+' : '';
+    const colour = Math.abs(divStats.pctChange) < 1 ? 'var(--a3)' : Math.abs(divStats.pctChange) < 10 ? 'var(--a2)' : 'var(--a5)';
+    metaParts.push(
+      `Δ Total: <span style="color:${colour};font-weight:600">${sign}${divStats.pctChange.toFixed(1)}%</span>` +
+      ` (base <span style="color:var(--a3)">${formatShort(divStats.baseTotal)}</span>` +
+      ` → recon <span style="color:var(--a2)">${formatShort(divStats.reconTotal)}</span>)`
+    );
+  } else if (!hasDivergence && showBase) {
+    metaParts.push('<span style="color:var(--tx3);font-size:11px">Base forecast not available — re-run reconciliation</span>');
+  }
+  setHtml('recon-chart-meta', metaParts.join(' &nbsp;·&nbsp; ') + trunc);
+  highlightReconTreeSelection();
+}
+
+function downloadReconciledForecast() {
+  if(!S.reconDownloadToken){toast('No reconciled forecast output available yet','err');return;}
+  const ext=S.reconDownloadExt||'xlsx';
+  window.location.href=`${API}/api/download/${S.reconDownloadToken}?ext=${ext}`;
+  toast('Download started','ok');
+}
+
+function toggleReconTree() {
+  if(!RECON.result || RECON.result.preview_truncated) return;
+  RECON.treeExpanded=!RECON.treeExpanded;
+  syncReconTreeVisibility();
+}
+
+function syncReconTreeVisibility() {
+  const wrap=document.getElementById('recon-tree-wrap');
+  const icon=document.getElementById('recon-tree-icon');
+  const hint=document.getElementById('recon-tree-hint');
+  if(!wrap || !icon || !hint) return;
+  wrap.style.display = RECON.treeExpanded ? 'block' : 'none';
+  icon.textContent = RECON.treeExpanded ? '▼' : '▶';
+  hint.textContent = RECON.treeExpanded ? 'click to collapse' : 'click to expand';
+}
+
+function buildReconTree() {
+  const root=document.getElementById('recon-tree-root');
+  if(!root || !RECON.result || RECON.result.preview_truncated) return;
+  const nodes=RECON.result.preview_nodes||[];
+  const byParent={};
+  nodes.forEach(node=>{
+    const parent=node.parent_id ?? '__root__';
+    (byParent[parent] ||= []).push(node);
+  });
+  Object.values(byParent).forEach(arr=>arr.sort((a,b)=>(a.label||'').localeCompare(b.label||'')));
+  root.innerHTML='';
+  const topNodes=(byParent['__root__']||[]).concat(byParent[null]||[]).filter((v,i,a)=>a.findIndex(x=>x.node_id===v.node_id)===i);
+  topNodes.forEach(node=>root.appendChild(createReconTreeNode(node, byParent, 0)));
+  highlightReconTreeSelection();
+}
+
+function createReconTreeNode(node, byParent, depth) {
+  const wrap=document.createElement('div');
+  const children=(byParent[node.node_id]||[]);
+  const isLeaf=!children.length;
+
+  const row=document.createElement('div');
+  row.className='vtree-node'+(isLeaf?' leaf':'');
+  row.dataset.nodeId=node.node_id;
+
+  for(let i=0;i<depth;i++){
+    const indent=document.createElement('span');
+    indent.className='vtree-indent';
+    indent.innerHTML='<span class="vtree-indent-line"></span><span class="vtree-indent-horz"></span>';
+    row.appendChild(indent);
+  }
+
+  let childWrap=null;
+  if(children.length){
+    const toggle=document.createElement('button');
+    toggle.className='vtree-toggle-btn';
+    toggle.textContent = depth < 1 ? '−' : '+';
+    row.appendChild(toggle);
+    childWrap=document.createElement('div');
+    childWrap.className='vtree-children'+(depth < 1 ? ' open' : '');
+    toggle.onclick=(e)=>{
+      e.stopPropagation();
+      const open=childWrap.classList.toggle('open');
+      toggle.textContent = open ? '−' : '+';
+    };
+  } else {
+    const spacer=document.createElement('span');
+    spacer.style.cssText='display:inline-block;width:21px;flex-shrink:0';
+    row.appendChild(spacer);
+  }
+
+  const label=document.createElement('div');
+  label.className='vtree-label';
+  const countHtml=children.length ? `<span class="vtree-count">${children.length}</span>` : '';
+  label.innerHTML=`${escapeHtml(node.node_value||node.label||node.node_id)}${countHtml}`;
+  row.appendChild(label);
+  row.onclick=()=>selectReconNodeFromTree(node.node_id, node.level_name);
+  wrap.appendChild(row);
+
+  if(childWrap){
+    children.forEach(child=>childWrap.appendChild(createReconTreeNode(child, byParent, depth+1)));
+    wrap.appendChild(childWrap);
+  }
+  return wrap;
+}
+
+function selectReconNodeFromTree(nodeId, levelName) {
+  const levelSel=document.getElementById('recon-level-select');
+  if(levelSel && levelName) {
+    levelSel.value=levelName;
+    RECON.selectedLevel=levelName;
+    onReconPreviewLevelChange();
+  }
+  const nodeSel=document.getElementById('recon-node-select');
+  if(nodeSel && Array.from(nodeSel.options).some(opt=>opt.value===nodeId)) {
+    nodeSel.value=nodeId;
+  }
+  RECON.selectedNodeId=nodeId;
+  renderReconSelectedNode();
+}
+
+function highlightReconTreeSelection() {
+  document.querySelectorAll('#recon-tree-root .vtree-node.selected').forEach(n=>n.classList.remove('selected'));
+  if(!RECON.selectedNodeId) return;
+  const node=document.querySelector(`#recon-tree-root .vtree-node[data-node-id="${CSS.escape(RECON.selectedNodeId)}"]`);
+  if(node) node.classList.add('selected');
+}
 
 // TAB 5 — LEVEL STABILITY ANALYSIS
 // ════════════════════════════════════════════════════════════

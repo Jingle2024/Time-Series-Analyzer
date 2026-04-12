@@ -37,6 +37,7 @@ from routes import (
     ingestion,
     interval,
     prepare,
+    reconciliation,
     system,
     treatment,
 )
@@ -66,6 +67,7 @@ app.include_router(hierarchy.router)   # /api/hierarchy, /api/hierarchy-tree,
 app.include_router(treatment.router)   # /api/missing-values, /api/outliers
 app.include_router(prepare.router)     # /api/prepare
 app.include_router(forecast.router)    # /api/forecast-prepare
+app.include_router(reconciliation.router)  # /api/reconciled-forecast
 app.include_router(system.router)      # /api/download/{token}, /, /health
 
 # ── Dev server ─────────────────────────────────────────────────────────────────
