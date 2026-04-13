@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useAppState } from '../context/AppContext';
+import { useAppState } from './useAppState';
 import { getHierarchyChildren } from '../services/api';
 
 export function useHierarchy() {

@@ -1,8 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useState, useCallback } from 'react';
 
 // ─── API base ────────────────────────────────────────────────
-export const API_BASE = "https://goldfish-app-avb6e.ondigitalocean.app";
-// export const API_BASE = 'http://127.0.0.1:8080';
 
 // ─── Initial state ───────────────────────────────────────────
 const initialState = {
@@ -64,8 +62,4 @@ export function AppProvider({ children }) {
   );
 }
 
-export function useAppState() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useAppState must be used within AppProvider');
-  return ctx;
-}
+export default AppContext;

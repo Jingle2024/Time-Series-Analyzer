@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAppState } from '../../context/AppContext';
+import { useAppState } from '../../hooks/useAppState';
 import { apiCall, getDownloadUrl } from '../../services/api';
 import { fmtNum, buildLineChartOptions } from '../../utils/helpers';
 import { Alert, Loader, StatCard, DataTable, Toggle } from '../shared/UI';

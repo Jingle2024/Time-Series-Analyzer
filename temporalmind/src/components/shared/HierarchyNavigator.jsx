@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAppState } from '../../context/AppContext';
+import { useAppState } from '../../hooks/useAppState';
 import { useHierarchy } from '../../hooks/useHierarchy';
 import { Chip } from '../shared/UI';
 
