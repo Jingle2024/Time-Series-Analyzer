@@ -340,11 +340,38 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 /* Recon forecast-only badge (separate ID, same visual style) */
 #recon-fc-only-badge{display:none;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--a4);background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:4px;padding:2px 7px;vertical-align:middle;margin-left:6px}
 .recon-fc-active #recon-fc-only-badge{display:inline}
-#recon-chart{transition:height .25s ease;width:100%;display:block}
+#recon-chart-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+#recon-chart-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#recon-chart-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+#recon-chart-legend:empty{display:none;margin-bottom:0}
+.recon-series-toggle{display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);font-size:11px;color:var(--tx2);font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:all .15s;user-select:none}
+.recon-series-toggle:hover{border-color:var(--border2);color:var(--tx)}
+.recon-series-toggle.dimmed{opacity:.45}
+.recon-series-toggle input{accent-color:var(--a1);cursor:pointer}
+.recon-series-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+#recon-chart-viewport{position:relative;width:100%;height:300px}
+.recon-fc-active #recon-chart-viewport{height:360px}
+#recon-chart{width:100%;height:100%!important;display:block}
 #prep-timeline-chart{width:100%;display:block}
 #prep-timeline-container{position:relative;width:100%}
 
-/* ══ LEVEL STABILITY ══ */
+/* ══ RECON FAMILY CONTEXT CHART ══ */
+#recon-family-card {
+  overflow-y: hidden;
+}
+canvas {
+  height: 300px !important;
+}
+
+.family-legend{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.family-legend-item{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer;border:1px solid var(--border);background:var(--bg2);transition:all .15s;user-select:none}
+.family-legend-item:hover{border-color:var(--border2)}
+.family-legend-item.dimmed{opacity:.28}
+.family-legend-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.family-role-badge{font-size:9px;letter-spacing:.5px;padding:1px 5px;border-radius:3px;font-family:'IBM Plex Mono',monospace}
+.role-selected{background:rgba(249,115,22,.18);color:var(--a2)}
+.role-ancestor{background:rgba(59,130,246,.15);color:var(--a1)}
+.role-child{background:rgba(16,185,129,.15);color:var(--a3)}
 .interval-pill-row{display:flex;gap:6px;flex-wrap:wrap}
 .ipill{padding:5px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;
   color:var(--tx2);cursor:pointer;transition:all .15s;font-family:'IBM Plex Mono',monospace;
@@ -1098,26 +1125,67 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
         </div>
       </div>
       <div class="card fc-only-card" id="recon-chart-card" style="margin-bottom:16px">
-        <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <div id="recon-chart-toolbar">
+          <div class="chart-title" style="margin-bottom:0">
           <span>Selected Node Timeline<span id="recon-fc-only-badge">FORECAST VIEW</span></span>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <label class="fc-only-toggle" id="recon-base-toggle-btn" title="Overlay the raw model forecast before hierarchy reconciliation" style="border-color:rgba(16,185,129,.35)">
+          </div>
+          <div id="recon-chart-controls">
+            <label class="fc-only-toggle fc-active" id="recon-base-toggle-btn" title="Overlay the raw model forecast before hierarchy reconciliation" style="border-color:rgba(16,185,129,.35)">
               <input type="checkbox" class="fc-chk" id="recon-base-chk" checked onchange="toggleReconBaseForecast(this.checked)">
               <span style="color:var(--a3)">📊 Show Base Forecast</span>
             </label>
-            <label class="fc-only-toggle" id="recon-fc-only-toggle-btn" title="Hide history and zoom into the forecast window only">
-              <input type="checkbox" class="fc-chk" id="recon-fc-only-chk" onchange="toggleReconForecastOnly(this.checked)">
-              <span>🔭 Show Forecast Only</span>
-            </label>
-          </div>
+          <label class="fc-only-toggle" id="recon-fc-only-toggle-btn" title="Hide history and zoom into the forecast window only">
+            <input type="checkbox" class="fc-chk" id="recon-fc-only-chk" onchange="toggleReconForecastOnly(this.checked)">
+            <span>🔭 Show Forecast Only</span>
+          </label>
         </div>
-        <div style="position:relative">
+        </div>
+        <div id="recon-chart-legend"></div>
+        <div id="recon-chart-viewport">
           <canvas id="recon-chart" height="180"></canvas>
         </div>
         <div id="recon-chart-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
       </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Node Summary Preview</div>
+      <!-- ═══ FAMILY CONTEXT CHART — new card, existing chart above is untouched ═══ -->
+      <div class="card" id="recon-family-card" style="margin-bottom:16px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+          <div>
+            <div class="card-title" style="margin-bottom:3px">
+              Family Context — Reconciled vs Base Model Forecast
+            </div>
+            <div style="font-size:12px;color:var(--tx2)" id="recon-family-subtitle">
+              Selected node · ancestors · direct children
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <!-- Forecast-only toggle specific to this chart -->
+            <label class="fc-only-toggle" id="recon-family-fc-btn" title="Show forecast window only">
+              <input type="checkbox" class="fc-chk" id="recon-family-fc-chk" onchange="toggleFamilyForecastOnly(this.checked)">
+              <span>🔭 Forecast Only</span>
+            </label>
+            <button class="btn btn-ghost btn-sm" onclick="toggleFamilyLegend(true)">Show All</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleFamilyLegend(false)">Hide All</button>
+          </div>
+        </div>
+        <!-- Interactive legend -->
+        <div class="family-legend" id="recon-family-legend"></div>
+        <!-- Side-by-side: Base Model (left) | Reconciled (right) -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
+              📊 Base Model Forecast <span style="color:var(--tx3);font-weight:400">(pre-reconciliation)</span>
+            </div>
+            <canvas id="recon-family-base-chart" height="200"></canvas>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
+              ✅ Reconciled Forecast <span style="color:var(--tx3);font-weight:400">(post-reconciliation)</span>
+            </div>
+            <canvas id="recon-family-recon-chart" height="200"></canvas>
+          </div>
+        </div>
+        <div id="recon-family-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
+      </div>
         <div class="tbl-wrap" id="recon-node-summary" style="max-height:260px;overflow:auto"></div>
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -1300,6 +1368,7 @@ const S = {
   prepForecastOnly: false,
   reconForecastOnly: false,
   reconShowBase: true,
+  reconFamilyForecastOnly: false,
   // hierarchy tree
   hierTree: null, hierLevels: [], hierLevelValues: {},
   hierTreeDeferred: false, hierChildCache: {},
@@ -2997,6 +3066,14 @@ const RECON = {
   selectedLevel: 'total',
   selectedNodeId: null,
   treeExpanded: false,
+  visibleSeries: new Set(['history', 'base', 'reconciled']),
+};
+
+const FAMILY = {
+  // tracks which node IDs are currently visible in the family chart
+  visible: new Set(),
+  // last rendered family member list (for legend rebuild)
+  members: [],   // [{nodeId, role, label, color}]
 };
 
 function initReconTab() {
@@ -3133,10 +3210,33 @@ function toggleReconForecastOnly(checked) {
   if (btn)  btn.classList.toggle('fc-active', S.reconForecastOnly);
   if (card) card.classList.toggle('recon-fc-active', S.reconForecastOnly);
   if (chk && chk.checked !== S.reconForecastOnly) chk.checked = S.reconForecastOnly;
-  const canvas = document.getElementById('recon-chart');
-  if (canvas) canvas.setAttribute('height', S.reconForecastOnly ? '360' : '180');
   renderReconSelectedNode();
   toast(S.reconForecastOnly ? '🔭 Forecast-only view — history hidden' : '📈 Full timeline view restored', 'info', 2000);
+}
+
+function renderReconChartLegend(hasBase) {
+  const legend = document.getElementById('recon-chart-legend');
+  if (!legend) return;
+  const items = [
+    { key: 'history', label: 'History', color: '#60a5fa' },
+    ...(hasBase && S.reconShowBase ? [{ key: 'base', label: 'Base Forecast', color: '#10b981' }] : []),
+    { key: 'reconciled', label: 'Reconciled', color: '#f97316' },
+  ];
+  legend.innerHTML = items.map(item => {
+    const checked = RECON.visibleSeries.has(item.key) ? 'checked' : '';
+    const dimmed = checked ? '' : ' dimmed';
+    return `<label class="recon-series-toggle${dimmed}" title="Toggle ${item.label}">
+      <input type="checkbox" ${checked} onchange="toggleReconSeries('${item.key}', this.checked)">
+      <span class="recon-series-swatch" style="background:${item.color}"></span>
+      <span>${item.label}</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleReconSeries(seriesKey, checked) {
+  if (checked) RECON.visibleSeries.add(seriesKey);
+  else RECON.visibleSeries.delete(seriesKey);
+  renderReconSelectedNode();
 }
 
 function renderReconSelectedNode() {
@@ -3147,6 +3247,7 @@ function renderReconSelectedNode() {
   const preview=(RECON.result.node_previews||{})[nodeId];
   if(!preview){
     destroyChart('recon-chart');
+    setHtml('recon-chart-legend', '');
     setHtml('recon-chart-meta','Selected node is not available in the preview payload. Use the export for the full hierarchy.');
     return;
   }
@@ -3215,12 +3316,12 @@ function renderReconSelectedNode() {
 
   // 1. History (actual observations)
   const histDataset = {
-    label: 'History (actual)',
+    label: 'History',
     data: history,
-    borderColor: forecastOnly ? 'rgba(96,165,250,.3)' : '#60a5fa',
-    backgroundColor: 'transparent',
+    borderColor: forecastOnly ? 'rgba(96,165,250,.35)' : '#60a5fa',
+    backgroundColor: forecastOnly ? 'rgba(96,165,250,.04)' : 'rgba(96,165,250,.08)',
     pointRadius: 0,
-    borderWidth: forecastOnly ? 1 : 1.8,
+    borderWidth: forecastOnly ? 1 : 2,
     tension: .25,
     fill: false,
     borderDash: forecastOnly ? [4, 3] : [],
@@ -3258,10 +3359,11 @@ function renderReconSelectedNode() {
   };
 
   // Build dataset array — base only included when available and toggled on
+  renderReconChartLegend(hasDivergence);
   const datasets = [
-    histDataset,
-    ...(hasDivergence && showBase ? [baseDataset] : []),
-    reconDataset,
+    ...(RECON.visibleSeries.has('history') ? [histDataset] : []),
+    ...(hasDivergence && showBase && RECON.visibleSeries.has('base') ? [baseDataset] : []),
+    ...(RECON.visibleSeries.has('reconciled') ? [reconDataset] : []),
   ];
 
   S.charts['recon-chart'] = new Chart(ctx, {
@@ -3273,17 +3375,7 @@ function renderReconSelectedNode() {
       animation: { duration: 300 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          display: true,
-          labels: {
-            color: '#8faec8',
-            boxWidth: 14,
-            font: { size: 11 },
-            filter: forecastOnly
-              ? (item) => item.text !== 'History (actual)'
-              : undefined,
-          },
-        },
+        legend: { display: false },
         tooltip: {
           mode: 'index',
           intersect: false,
@@ -3295,7 +3387,7 @@ function renderReconSelectedNode() {
           callbacks: {
             // Add a "Δ Reconciliation adjustment" line when both series are visible
             afterBody: (items) => {
-              if (!hasDivergence || !showBase) return [];
+              if (!hasDivergence || !showBase || !RECON.visibleSeries.has('base') || !RECON.visibleSeries.has('reconciled')) return [];
               const baseItem  = items.find(i => i.dataset.label === 'Base Model Forecast');
               const reconItem = items.find(i => i.dataset.label === 'Reconciled Forecast');
               if (baseItem == null || reconItem == null) return [];
@@ -3331,22 +3423,13 @@ function renderReconSelectedNode() {
     `<strong style="color:var(--tx)">${escapeHtml(meta.display_path || meta.label || nodeId)}</strong>`,
     `Level: <span style="color:var(--a4)">${escapeHtml(meta.level_name || '')}</span>`,
     forecastOnly
-      ? `🔭 Forecast-only · ${preview.future_n || 0} periods`
-      : `History: ${preview.history_n || 0} pts · Horizon: ${preview.future_n || 0} periods`,
+      ? `🔭 Forecast-only view · ${preview.future_n||0} forecast points`
+      : `History: ${preview.history_n||0} points · Future: ${preview.future_n||0} points`,
   ];
-  if (divStats && hasDivergence && showBase) {
-    const sign = divStats.pctChange >= 0 ? '+' : '';
-    const colour = Math.abs(divStats.pctChange) < 1 ? 'var(--a3)' : Math.abs(divStats.pctChange) < 10 ? 'var(--a2)' : 'var(--a5)';
-    metaParts.push(
-      `Δ Total: <span style="color:${colour};font-weight:600">${sign}${divStats.pctChange.toFixed(1)}%</span>` +
-      ` (base <span style="color:var(--a3)">${formatShort(divStats.baseTotal)}</span>` +
-      ` → recon <span style="color:var(--a2)">${formatShort(divStats.reconTotal)}</span>)`
-    );
-  } else if (!hasDivergence && showBase) {
-    metaParts.push('<span style="color:var(--tx3);font-size:11px">Base forecast not available — re-run reconciliation</span>');
-  }
   setHtml('recon-chart-meta', metaParts.join(' &nbsp;·&nbsp; ') + trunc);
   highlightReconTreeSelection();
+  // Always re-render the family context chart when the selected node changes
+  renderFamilyContextChart();
 }
 
 function downloadReconciledForecast() {
@@ -3354,6 +3437,340 @@ function downloadReconciledForecast() {
   const ext=S.reconDownloadExt||'xlsx';
   window.location.href=`${API}/api/download/${S.reconDownloadToken}?ext=${ext}`;
   toast('Download started','ok');
+}
+
+// ════════════════════════════════════════════════════════════
+// FAMILY CONTEXT CHART
+// Shows the selected node + all ancestor nodes (parent chain
+// up to root) + all direct children — in two side-by-side
+// charts: Base Model Forecast and Reconciled Forecast.
+// Only the forecast window is plotted (future arrays).
+// ════════════════════════════════════════════════════════════
+
+const FAMILY_PALETTE = [
+  '#f97316','#3b82f6','#10b981','#8b5cf6','#ef4444','#06b6d4',
+  '#f59e0b','#ec4899','#84cc16','#14b8a6','#a855f7','#fb923c',
+  '#22d3ee','#4ade80','#f472b6','#60a5fa','#34d399','#c084fc',
+];
+
+function _buildFamilyMembers(nodeId) {
+  // Returns [{nodeId, role, label, displayPath, color}]
+  // role: 'selected' | 'ancestor' | 'child'
+  if (!RECON.result) return [];
+  const previews   = RECON.result.node_previews    || {};
+  const allMeta    = RECON.result.preview_nodes    || [];
+  const metaById   = {};
+  allMeta.forEach(n => { metaById[n.node_id] = n; });
+
+  const members = [];
+
+  // ── 1. Ancestor chain (walk parent_id up to root) ──────────────────────────
+  const ancestors = [];
+  let cursor = metaById[nodeId];
+  while (cursor && cursor.parent_id) {
+    const parent = metaById[cursor.parent_id];
+    if (!parent) break;
+    ancestors.unshift(parent);   // prepend so root comes first
+    cursor = parent;
+  }
+  // Ancestors: from root down, each lighter shade of blue
+  ancestors.forEach((anc, i) => {
+    if (previews[anc.node_id]) {
+      members.push({
+        nodeId:      anc.node_id,
+        role:        'ancestor',
+        label:       anc.label || anc.node_id,
+        displayPath: anc.display_path || anc.label || anc.node_id,
+        depth:       anc.depth || 0,
+      });
+    }
+  });
+
+  // ── 2. Selected node itself ────────────────────────────────────────────────
+  const selMeta = metaById[nodeId] || {};
+  if (previews[nodeId]) {
+    members.push({
+      nodeId:      nodeId,
+      role:        'selected',
+      label:       selMeta.label || nodeId,
+      displayPath: selMeta.display_path || selMeta.label || nodeId,
+      depth:       selMeta.depth || 0,
+    });
+  }
+
+  // ── 3. Direct children ────────────────────────────────────────────────────
+  // Identify children by scanning for nodes whose parent_id === nodeId
+  const children = allMeta.filter(n => n.parent_id === nodeId && previews[n.node_id]);
+  children.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+  children.forEach(ch => {
+    members.push({
+      nodeId:      ch.node_id,
+      role:        'child',
+      label:       ch.label || ch.node_id,
+      displayPath: ch.display_path || ch.label || ch.node_id,
+      depth:       ch.depth || 0,
+    });
+  });
+
+  // ── Assign colours ─────────────────────────────────────────────────────────
+  // Selected = orange, ancestors = blue gradient, children = green-to-violet palette
+  let childPaletteIdx = 0;
+  const ancestorBlues = ['#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8'];
+  members.forEach((m, i) => {
+    if (m.role === 'selected') {
+      m.color = '#f97316';  // orange — matches main chart
+    } else if (m.role === 'ancestor') {
+      // Deeper ancestors = darker blue; shallower = lighter
+      const blueIdx = Math.min(m.depth, ancestorBlues.length - 1);
+      m.color = ancestorBlues[blueIdx];
+    } else {
+      // Children cycle through a distinct palette
+      m.color = FAMILY_PALETTE[(2 + childPaletteIdx++) % FAMILY_PALETTE.length];
+    }
+  });
+
+  return members;
+}
+
+function _getForecastWindow(members) {
+  // Build the common future-only time axis from the first member that has data
+  const previews = RECON.result.node_previews || {};
+  for (const m of members) {
+    const p = previews[m.nodeId];
+    if (!p) continue;
+    const histN = p.history_n || 0;
+    const labels = (p.labels || []).slice(histN);
+    if (labels.length) return { labels, histN };
+  }
+  return { labels: [], histN: 0 };
+}
+
+function renderFamilyContextChart() {
+  const card = document.getElementById('recon-family-card');
+  if (!RECON.result || !RECON.selectedNodeId) {
+    if (card) card.style.display = 'none';
+    return;
+  }
+
+  const previews = RECON.result.node_previews || {};
+  const members  = _buildFamilyMembers(RECON.selectedNodeId);
+
+  // Need at least 2 members (selected + at least one ancestor or child) to be useful
+  if (members.length < 2) {
+    if (card) card.style.display = 'none';
+    return;
+  }
+
+  if (card) card.style.display = 'block';
+
+  // Initialise visibility — all visible on first render for this node,
+  // preserve current state if same set of nodes
+  const newIds = new Set(members.map(m => m.nodeId));
+  const oldIds = new Set(FAMILY.members.map(m => m.nodeId));
+  const sameSet = newIds.size === oldIds.size && [...newIds].every(id => oldIds.has(id));
+  if (!sameSet) {
+    FAMILY.visible = new Set(members.map(m => m.nodeId));
+  }
+  FAMILY.members = members;
+
+  // Build legend
+  const legendHtml = members.map(m => {
+    const roleLabel = m.role === 'selected' ? 'selected' : m.role === 'ancestor' ? 'ancestor' : 'child';
+    const roleCls   = m.role === 'selected' ? 'role-selected' : m.role === 'ancestor' ? 'role-ancestor' : 'role-child';
+    const dimmed    = !FAMILY.visible.has(m.nodeId) ? ' dimmed' : '';
+    return `<div class="family-legend-item${dimmed}" id="fleg-${CSS.escape(m.nodeId)}"
+                 onclick="toggleFamilyNode('${m.nodeId.replace(/'/g,"\\'")}')"
+                 title="${escapeHtml(m.displayPath)}">
+      <div class="family-legend-swatch" style="background:${m.color}"></div>
+      <span class="family-role-badge ${roleCls}">${roleLabel}</span>
+      <span style="color:var(--tx)">${escapeHtml(m.label)}</span>
+    </div>`;
+  }).join('');
+  setHtml('recon-family-legend', legendHtml);
+
+  // Subtitle
+  const nAncestors = members.filter(m => m.role === 'ancestor').length;
+  const nChildren  = members.filter(m => m.role === 'child').length;
+  const selLabel   = members.find(m => m.role === 'selected')?.label || RECON.selectedNodeId;
+  setHtml('recon-family-subtitle',
+    `<strong style="color:var(--tx)">${escapeHtml(selLabel)}</strong>` +
+    (nAncestors ? ` · ${nAncestors} ancestor${nAncestors>1?'s':''}` : '') +
+    (nChildren  ? ` · ${nChildren} child${nChildren>1?'ren':''}` : ''));
+
+  // Determine time window
+  const fcOnly = !!S.reconFamilyForecastOnly;
+  const { labels: futureLabels, histN } = _getForecastWindow(members);
+  if (!futureLabels.length) {
+    setHtml('recon-family-meta', 'No forecast data available for this family group.');
+    return;
+  }
+
+  // Build datasets for each member
+  function buildDatasets(useReconciled) {
+    return members.map(m => {
+      const p = previews[m.nodeId];
+      const isVisible = FAMILY.visible.has(m.nodeId);
+
+      // Future-only slice from the correct array
+      const srcArray = useReconciled
+        ? (p ? p.future   || [] : [])
+        : (p ? p.base_forecast || p.future || [] : []);   // fall back to future if base not present
+
+      const nodeHistN = p ? (p.history_n || 0) : histN;
+      const forecastVals = srcArray.slice(nodeHistN);  // drop history nulls
+
+      // Full timeline: if fcOnly → only the forecast window; else prepend history
+      let data, chartLabels;
+      if (fcOnly) {
+        data         = forecastVals;
+        chartLabels  = futureLabels;
+      } else {
+        const histVals   = (p ? p.history  || [] : []).slice(0, nodeHistN);
+        const histLabels = (p ? p.labels   || [] : []).slice(0, nodeHistN);
+        data        = [...histVals, ...forecastVals];
+        chartLabels = [...histLabels, ...futureLabels];
+      }
+
+      const isSel = m.role === 'selected';
+      return {
+        label:           m.label,
+        data,
+        borderColor:     m.color,
+        backgroundColor: 'transparent',
+        borderWidth:     isSel ? 2.5 : (m.role === 'ancestor' ? 1.2 : 1.5),
+        borderDash:      m.role === 'ancestor' ? [5, 3] : [],
+        pointRadius:     0,
+        pointHoverRadius: 4,
+        tension:         0.25,
+        fill:            false,
+        hidden:          !isVisible,
+        // Store for toggling without full redraw
+        _nodeId:         m.nodeId,
+      };
+    });
+  }
+
+  // Use labels from the selected node (they all share the same time axis)
+  const selPreview = previews[RECON.selectedNodeId] || {};
+  const allLabels  = selPreview.labels || [];
+  const selHistN   = selPreview.history_n || 0;
+  const chartLabels = fcOnly
+    ? allLabels.slice(selHistN)
+    : allLabels;
+
+  const opts = {
+    responsive:          true,
+    maintainAspectRatio: false,
+    animation:           { duration: 280 },
+    interaction:         { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },   // we use our custom legend
+      tooltip: {
+        backgroundColor: 'rgba(12,16,25,.95)',
+        titleColor:  '#e8f0fe',
+        bodyColor:   '#8faec8',
+        borderColor: 'rgba(59,130,246,.3)',
+        borderWidth: 1,
+      },
+    },
+    scales: {
+      x: { ticks: { color: '#3d5a7a', maxTicksLimit: fcOnly ? 8 : 10, font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(31,45,66,.5)' } },
+      y: { ticks: { color: '#3d5a7a', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(31,45,66,.5)' } },
+    },
+  };
+
+  // ── Base chart ─────────────────────────────────────────────────────────────
+  destroyChart('recon-family-base-chart');
+  const ctxBase = document.getElementById('recon-family-base-chart');
+  if (ctxBase) {
+    const hasBase = members.some(m => previews[m.nodeId]?.base_forecast?.length);
+    if (hasBase) {
+      S.charts['recon-family-base-chart'] = new Chart(ctxBase, {
+        type: 'line',
+        data: { labels: chartLabels, datasets: buildDatasets(false) },
+        options: opts,
+      });
+    } else {
+      // base_forecast not available → show placeholder text
+      destroyChart('recon-family-base-chart');
+      ctxBase.style.display = 'none';
+      const par = ctxBase.parentElement;
+      if (par && !par.querySelector('.family-nobase-msg')) {
+        const msg = document.createElement('div');
+        msg.className = 'family-nobase-msg alert alert-info';
+        msg.style.cssText = 'font-size:12px;margin-top:8px';
+        msg.textContent = 'Base forecast not available — re-run reconciliation to see pre-reconciliation comparison.';
+        par.appendChild(msg);
+      }
+    }
+  }
+
+  // ── Reconciled chart ───────────────────────────────────────────────────────
+  destroyChart('recon-family-recon-chart');
+  const ctxRecon = document.getElementById('recon-family-recon-chart');
+  if (ctxRecon) {
+    S.charts['recon-family-recon-chart'] = new Chart(ctxRecon, {
+      type: 'line',
+      data: { labels: chartLabels, datasets: buildDatasets(true) },
+      options: opts,
+    });
+  }
+
+  // Meta row
+  setHtml('recon-family-meta',
+    `${members.length} series · ${futureLabels.length} forecast periods` +
+    (fcOnly ? ' · 🔭 Forecast-only view' : '') +
+    (RECON.result.preview_truncated ? ' · <em style="color:var(--tx3)">Some nodes may be missing (preview cap reached)</em>' : ''));
+}
+
+function toggleFamilyNode(nodeId) {
+  if (FAMILY.visible.has(nodeId)) FAMILY.visible.delete(nodeId);
+  else FAMILY.visible.add(nodeId);
+
+  // Update legend item visual
+  const legEl = document.getElementById(`fleg-${CSS.escape(nodeId)}`);
+  if (legEl) legEl.classList.toggle('dimmed', !FAMILY.visible.has(nodeId));
+
+  // Toggle dataset visibility in both charts directly (no full redraw needed)
+  ['recon-family-base-chart','recon-family-recon-chart'].forEach(chartId => {
+    const chart = S.charts[chartId];
+    if (!chart) return;
+    chart.data.datasets.forEach((ds, idx) => {
+      if (ds._nodeId === nodeId) {
+        chart.setDatasetVisibility(idx, FAMILY.visible.has(nodeId));
+      }
+    });
+    chart.update('none');   // no animation for instant toggle
+  });
+}
+
+function toggleFamilyLegend(showAll) {
+  FAMILY.members.forEach(m => {
+    if (showAll) FAMILY.visible.add(m.nodeId);
+    else         FAMILY.visible.delete(m.nodeId);
+  });
+  // Sync legend item styles
+  FAMILY.members.forEach(m => {
+    const el = document.getElementById(`fleg-${CSS.escape(m.nodeId)}`);
+    if (el) el.classList.toggle('dimmed', !FAMILY.visible.has(m.nodeId));
+  });
+  // Sync chart dataset visibility
+  ['recon-family-base-chart','recon-family-recon-chart'].forEach(chartId => {
+    const chart = S.charts[chartId];
+    if (!chart) return;
+    chart.data.datasets.forEach((ds, idx) => {
+      chart.setDatasetVisibility(idx, showAll || FAMILY.visible.has(ds._nodeId));
+    });
+    chart.update('none');
+  });
+}
+
+function toggleFamilyForecastOnly(checked) {
+  S.reconFamilyForecastOnly = !!checked;
+  const btn = document.getElementById('recon-family-fc-btn');
+  if (btn) btn.classList.toggle('fc-active', S.reconFamilyForecastOnly);
+  // Full redraw needed because x-axis labels change
+  renderFamilyContextChart();
 }
 
 function toggleReconTree() {
