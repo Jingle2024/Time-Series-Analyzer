@@ -363,6 +363,37 @@ canvas {
   height: 300px !important;
 }
 
+/* Override Forecasts UI */
+#recon-detail-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:16px}
+#recon-override-toggle-btn{display:none}
+#recon-chart-card{display:block}
+#recon-override-card{display:none;min-width:0}
+#recon-detail-grid.override-open #recon-chart-card{padding:0;background:transparent;border:none;overflow:visible}
+#recon-detail-grid.override-open #recon-chart-card::before{display:none}
+#recon-detail-grid.override-open #recon-chart-legend,
+#recon-detail-grid.override-open #recon-chart-viewport,
+#recon-detail-grid.override-open #recon-chart-meta{display:none}
+#recon-detail-grid.override-open #recon-override-card{display:block}
+.override-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.override-card-sub{font-size:12px;color:var(--tx2)}
+.override-legend{font-size:12px;color:var(--tx2);margin-bottom:10px}
+.override-legend span{background:rgba(239,68,68,.08);padding:2px 6px;border-radius:4px}
+.override-transposed-wrap{overflow-x:auto;border-radius:var(--r2);border:1px solid var(--border);background:var(--bg2)}
+.override-table{width:max-content;min-width:100%;border-collapse:collapse}
+.override-table th,.override-table td{padding:10px 12px;border-bottom:1px solid rgba(31,45,66,.6);border-right:1px solid rgba(31,45,66,.35);vertical-align:middle}
+.override-table thead th{position:sticky;top:0;background:var(--bg1);z-index:1}
+.override-table tr:last-child th,.override-table tr:last-child td{border-bottom:none}
+.override-table th:last-child,.override-table td:last-child{border-right:none}
+.override-row-head{position:sticky;left:0;background:var(--bg1);z-index:1;min-width:150px;text-align:left;color:var(--tx2);font-family:'IBM Plex Mono',monospace;font-size:11px}
+.override-date-head{min-width:118px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px}
+.override-date-head.applied,.override-cell.applied{background:rgba(239,68,68,.08)}
+.override-readonly{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx);text-align:right}
+.override-source-cell{cursor:pointer;transition:all .15s}
+.override-source-cell:hover{background:rgba(59,130,246,.08)}
+.override-source-cell.selected{background:rgba(59,130,246,.16);box-shadow:inset 0 0 0 1px rgba(59,130,246,.35)}
+.override-select,.override-input{min-width:108px}
+.override-input{text-align:right}
+
 .family-legend{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
 .family-legend-item{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer;border:1px solid var(--border);background:var(--bg2);transition:all .15s;user-select:none}
 .family-legend-item:hover{border-color:var(--border2)}
@@ -1124,7 +1155,8 @@ canvas {
           <div id="recon-tree-root"></div>
         </div>
       </div>
-      <div class="card fc-only-card" id="recon-chart-card" style="margin-bottom:16px">
+      <div id="recon-detail-grid">
+      <div class="card fc-only-card" id="recon-chart-card" style="margin-bottom:0">
         <div id="recon-chart-toolbar">
           <div class="chart-title" style="margin-bottom:0">
           <span>Selected Node Timeline<span id="recon-fc-only-badge">FORECAST VIEW</span></span>
@@ -1134,6 +1166,10 @@ canvas {
               <input type="checkbox" class="fc-chk" id="recon-base-chk" checked onchange="toggleReconBaseForecast(this.checked)">
               <span style="color:var(--a3)">📊 Show Base Forecast</span>
             </label>
+          <label class="fc-only-toggle" id="recon-override-toggle-btn" title="Open the selected node override editor">
+            <input type="checkbox" class="fc-chk" id="recon-add-overrides" onchange="toggleOverrideTable(this.checked)">
+            <span>✍ Add Overrides</span>
+          </label>
           <label class="fc-only-toggle" id="recon-fc-only-toggle-btn" title="Hide history and zoom into the forecast window only">
             <input type="checkbox" class="fc-chk" id="recon-fc-only-chk" onchange="toggleReconForecastOnly(this.checked)">
             <span>🔭 Show Forecast Only</span>
@@ -1145,6 +1181,32 @@ canvas {
           <canvas id="recon-chart" height="180"></canvas>
         </div>
         <div id="recon-chart-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
+      </div>
+      <div class="card" id="recon-override-card">
+        <div class="override-card-head">
+          <div>
+            <div class="card-title" style="margin-bottom:3px">Override Forecast</div>
+            <div class="override-card-sub" id="recon-override-subtitle">Selected node override editor</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="runReconcileOverrides()">▶ Reconcile Overrides</button>
+        </div>
+        <div class="override-legend">
+          <span>🔴 Highlighted dates</span> indicate overrides already applied to the selected node.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <span id="recon-override-selection-info" style="font-size:12px;color:var(--tx2);margin-right:4px">Select baseline or reconciled cells</span>
+          <input type="number" class="form-control" id="recon-override-toolbar-value" placeholder="% or value" style="width:120px">
+          <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('pct')">Apply %</button>
+          <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('manual')">Set Value</button>
+          <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('clear')">Clear</button>
+        </div>
+        <div class="override-transposed-wrap" id="recon-override-table">
+          <table class="override-table">
+            <tbody id="recon-override-body"></tbody>
+          </table>
+        </div>
+        <div id="recon-override-info" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
+      </div>
       </div>
       <!-- ═══ FAMILY CONTEXT CHART — new card, existing chart above is untouched ═══ -->
       <div class="card" id="recon-family-card" style="margin-bottom:16px;display:none">
@@ -1170,7 +1232,7 @@ canvas {
         <!-- Interactive legend -->
         <div class="family-legend" id="recon-family-legend"></div>
         <!-- Side-by-side: Base Model (left) | Reconciled (right) -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
           <div>
             <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
               📊 Base Model Forecast <span style="color:var(--tx3);font-weight:400">(pre-reconciliation)</span>
@@ -1182,6 +1244,12 @@ canvas {
               ✅ Reconciled Forecast <span style="color:var(--tx3);font-weight:400">(post-reconciliation)</span>
             </div>
             <canvas id="recon-family-recon-chart" height="200"></canvas>
+          </div>
+          <div id="recon-family-override-panel" style="display:none">
+            <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
+              ✍ Override Forecast <span style="color:var(--tx3);font-weight:400">(post-override)</span>
+            </div>
+            <canvas id="recon-family-override-chart" height="200"></canvas>
           </div>
         </div>
         <div id="recon-family-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
@@ -1354,8 +1422,8 @@ canvas {
 // ════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════
-//const API = "https://goldfish-app-avb6e.ondigitalocean.app";
-const API = 'http://127.0.0.1:8080';
+const API = "https://goldfish-app-avb6e.ondigitalocean.app";
+//const API = 'http://127.0.0.1:8080';
 const S = {
   token: null, filename: null, uploadMeta: null,
   valueCols: [], hierCols: [], hierOrder: [], isHierarchy: false,
@@ -3066,7 +3134,9 @@ const RECON = {
   selectedLevel: 'total',
   selectedNodeId: null,
   treeExpanded: false,
-  visibleSeries: new Set(['history', 'base', 'reconciled']),
+  visibleSeries: new Set(['history', 'base', 'reconciled', 'override']),
+  overrideDrafts: {},
+  overrideSelection: { nodeId: null, source: null, timestamps: new Set(), values: {} },
 };
 
 const FAMILY = {
@@ -3138,12 +3208,37 @@ async function runReconciledForecast() {
     RECON.selectedLevel='total';
     RECON.selectedNodeId=r.default_node_id||null;
     renderReconResults(r);
+    populateOverrideTable(r.forecast_preview||[]);
     show('recon-results');
     toast(`Reconciled forecast complete — ${r.n_total_nodes} nodes`,'ok');
   } catch(e) {
     toast(`Reconciled forecast failed: ${e.message}`,'err');
   } finally {
     hide('recon-loader');
+  }
+}
+
+function syncReconOverrideUi(r) {
+  const card = document.getElementById('recon-override-card');
+  const toggleBtn = document.getElementById('recon-override-toggle-btn');
+  const toggle = document.getElementById('recon-add-overrides');
+  const table = document.getElementById('recon-override-table');
+  const info = document.getElementById('recon-override-info');
+  const grid = document.getElementById('recon-detail-grid');
+  const enabled = !!(r && r.overrides_enabled);
+  RECON.overrideDrafts = {};
+  RECON.overrideSelection = { nodeId: null, source: null, timestamps: new Set(), values: {} };
+
+  if (toggleBtn) toggleBtn.style.display = enabled ? 'inline-flex' : 'none';
+  if (toggle) toggle.checked = false;
+  if (toggleBtn) toggleBtn.classList.remove('fc-active');
+  if (card) card.style.display = 'none';
+  if (grid) grid.classList.remove('override-open');
+  if (table) table.style.display = enabled ? 'block' : 'none';
+  if (!enabled) {
+    setHtml('recon-override-body', '');
+    setHtml('recon-override-selection-info', 'Select baseline or reconciled cells');
+    if (info) info.textContent = '';
   }
 }
 
@@ -3154,6 +3249,7 @@ function renderReconResults(r) {
     statCard(r.n_total_nodes,'Nodes',r.preview_truncated?`${r.n_preview_nodes} previewed`:'all previewed','var(--a4)'),
     statCard((r.hierarchy_order||[]).length,'Levels',(r.hierarchy_order||[]).join(' → '),'var(--a2)')
   ].join(''));
+  syncReconOverrideUi(r);
   setHtml('recon-node-summary', buildTable(r.node_summary_preview||[]));
   setHtml('recon-forecast-preview', buildTable(r.forecast_preview||[]));
   setHtml('recon-report', r.report||'');
@@ -3214,13 +3310,14 @@ function toggleReconForecastOnly(checked) {
   toast(S.reconForecastOnly ? '🔭 Forecast-only view — history hidden' : '📈 Full timeline view restored', 'info', 2000);
 }
 
-function renderReconChartLegend(hasBase) {
+function renderReconChartLegend(hasBase, hasOverride) {
   const legend = document.getElementById('recon-chart-legend');
   if (!legend) return;
   const items = [
     { key: 'history', label: 'History', color: '#60a5fa' },
     ...(hasBase && S.reconShowBase ? [{ key: 'base', label: 'Base Forecast', color: '#10b981' }] : []),
     { key: 'reconciled', label: 'Reconciled', color: '#f97316' },
+    ...(hasOverride ? [{ key: 'override', label: 'Override Forecast', color: '#ef4444' }] : []),
   ];
   legend.innerHTML = items.map(item => {
     const checked = RECON.visibleSeries.has(item.key) ? 'checked' : '';
@@ -3241,9 +3338,11 @@ function toggleReconSeries(seriesKey, checked) {
 
 function renderReconSelectedNode() {
   if(!RECON.result) return;
-  const nodeId=document.getElementById('recon-node-select')?.value || RECON.selectedNodeId;
+  const nodeId = RECON.selectedNodeId || document.getElementById('recon-node-select')?.value;
   if(!nodeId) return;
-  RECON.selectedNodeId=nodeId;
+  RECON.selectedNodeId = nodeId;
+  const nodeSel = document.getElementById('recon-node-select');
+  if (nodeSel && nodeSel.value !== nodeId) nodeSel.value = nodeId;
   const preview=(RECON.result.node_previews||{})[nodeId];
   if(!preview){
     destroyChart('recon-chart');
@@ -3260,9 +3359,11 @@ function renderReconSelectedNode() {
   const allLabels      = preview.labels        || [];
   const allHistory     = preview.history       || [];
   const allFuture      = preview.future        || [];   // reconciled forecast
+  const allOverride    = preview.override_forecast || [];   // post-override forecast
   const allBase        = preview.base_forecast || [];   // model forecast pre-reconciliation
   const historyN       = preview.history_n     || 0;
   const hasDivergence  = allBase.length > 0;
+  const hasOverride    = allOverride.some(v => v != null && !isNaN(v));
 
   // ── Slice to forecast window when in forecast-only mode ───────────────────
   // Keep one overlap point so lines visually connect to the history anchor
@@ -3270,12 +3371,13 @@ function renderReconSelectedNode() {
   const labels     = allLabels.slice(sliceStart);
   const history    = allHistory.slice(sliceStart);
   const future     = allFuture.slice(sliceStart);       // reconciled
+  const overrideFc = allOverride.slice(sliceStart);     // overridden
   const baseFc     = allBase.slice(sliceStart);         // model (base)
 
   // ── Y-axis range ──────────────────────────────────────────────────────────
   let yMin, yMax;
   if (forecastOnly) {
-    const candidates = [...future, ...(showBase && hasDivergence ? baseFc : []), ...history]
+    const candidates = [...future, ...(hasOverride ? overrideFc : []), ...(showBase && hasDivergence ? baseFc : []), ...history]
       .filter(v => v != null && !isNaN(v));
     if (candidates.length) {
       const pad = (Math.max(...candidates) - Math.min(...candidates)) * 0.05 || Math.abs(Math.max(...candidates)) * 0.05 || 1;
@@ -3358,12 +3460,27 @@ function renderReconSelectedNode() {
     order: 1,
   };
 
+  const overrideDataset = {
+    label: 'Override Forecast',
+    data: overrideFc,
+    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239,68,68,.08)',
+    pointRadius: forecastOnly ? 4 : 2,
+    pointHoverRadius: 6,
+    borderWidth: forecastOnly ? 2.5 : 2,
+    tension: .25,
+    fill: false,
+    borderDash: [8, 4],
+    order: 0,
+  };
+
   // Build dataset array — base only included when available and toggled on
-  renderReconChartLegend(hasDivergence);
+  renderReconChartLegend(hasDivergence, hasOverride);
   const datasets = [
     ...(RECON.visibleSeries.has('history') ? [histDataset] : []),
     ...(hasDivergence && showBase && RECON.visibleSeries.has('base') ? [baseDataset] : []),
     ...(RECON.visibleSeries.has('reconciled') ? [reconDataset] : []),
+    ...(hasOverride && RECON.visibleSeries.has('override') ? [overrideDataset] : []),
   ];
 
   S.charts['recon-chart'] = new Chart(ctx, {
@@ -3428,6 +3545,7 @@ function renderReconSelectedNode() {
   ];
   setHtml('recon-chart-meta', metaParts.join(' &nbsp;·&nbsp; ') + trunc);
   highlightReconTreeSelection();
+  populateOverrideTable();
   // Always re-render the family context chart when the selected node changes
   renderFamilyContextChart();
 }
@@ -3611,10 +3729,11 @@ function renderFamilyContextChart() {
       const p = previews[m.nodeId];
       const isVisible = FAMILY.visible.has(m.nodeId);
 
-      // Future-only slice from the correct array
-      const srcArray = useReconciled
-        ? (p ? p.future   || [] : [])
-        : (p ? p.base_forecast || p.future || [] : []);   // fall back to future if base not present
+      // Future-only slice from the requested series
+      let srcArray = [];
+      if (useReconciled === 'override') srcArray = p ? (p.override_forecast || []) : [];
+      else if (useReconciled) srcArray = p ? (p.future || []) : [];
+      else srcArray = p ? (p.base_forecast || p.future || []) : [];   // fall back to future if base not present
 
       const nodeHistN = p ? (p.history_n || 0) : histN;
       const forecastVals = srcArray.slice(nodeHistN);  // drop history nulls
@@ -3716,6 +3835,20 @@ function renderFamilyContextChart() {
     });
   }
 
+  // Override chart
+  const overridePanel = document.getElementById('recon-family-override-panel');
+  const hasOverride = members.some(m => previews[m.nodeId]?.override_forecast?.some(v => v != null));
+  if (overridePanel) overridePanel.style.display = hasOverride ? 'block' : 'none';
+  destroyChart('recon-family-override-chart');
+  const ctxOverride = document.getElementById('recon-family-override-chart');
+  if (ctxOverride && hasOverride) {
+    S.charts['recon-family-override-chart'] = new Chart(ctxOverride, {
+      type: 'line',
+      data: { labels: chartLabels, datasets: buildDatasets('override') },
+      options: opts,
+    });
+  }
+
   // Meta row
   setHtml('recon-family-meta',
     `${members.length} series · ${futureLabels.length} forecast periods` +
@@ -3732,7 +3865,7 @@ function toggleFamilyNode(nodeId) {
   if (legEl) legEl.classList.toggle('dimmed', !FAMILY.visible.has(nodeId));
 
   // Toggle dataset visibility in both charts directly (no full redraw needed)
-  ['recon-family-base-chart','recon-family-recon-chart'].forEach(chartId => {
+    ['recon-family-base-chart','recon-family-recon-chart','recon-family-override-chart'].forEach(chartId => {
     const chart = S.charts[chartId];
     if (!chart) return;
     chart.data.datasets.forEach((ds, idx) => {
@@ -3755,7 +3888,7 @@ function toggleFamilyLegend(showAll) {
     if (el) el.classList.toggle('dimmed', !FAMILY.visible.has(m.nodeId));
   });
   // Sync chart dataset visibility
-  ['recon-family-base-chart','recon-family-recon-chart'].forEach(chartId => {
+  ['recon-family-base-chart','recon-family-recon-chart','recon-family-override-chart'].forEach(chartId => {
     const chart = S.charts[chartId];
     if (!chart) return;
     chart.data.datasets.forEach((ds, idx) => {
@@ -3856,18 +3989,20 @@ function createReconTreeNode(node, byParent, depth) {
 }
 
 function selectReconNodeFromTree(nodeId, levelName) {
-  const levelSel=document.getElementById('recon-level-select');
-  if(levelSel && levelName) {
-    levelSel.value=levelName;
-    RECON.selectedLevel=levelName;
-    onReconPreviewLevelChange();
+  RECON.selectedNodeId = nodeId;   // ✅ set first
+
+  const levelSel = document.getElementById('recon-level-select');
+  if (levelSel && levelName) {
+    levelSel.value = levelName;
+    RECON.selectedLevel = levelName;
+    onReconPreviewLevelChange();   // now sees the correct selectedNodeId, renders once correctly
+  } else {
+    const nodeSel = document.getElementById('recon-node-select');
+    if (nodeSel && Array.from(nodeSel.options).some(opt => opt.value === nodeId)) {
+      nodeSel.value = nodeId;
+    }
+    renderReconSelectedNode();
   }
-  const nodeSel=document.getElementById('recon-node-select');
-  if(nodeSel && Array.from(nodeSel.options).some(opt=>opt.value===nodeId)) {
-    nodeSel.value=nodeId;
-  }
-  RECON.selectedNodeId=nodeId;
-  renderReconSelectedNode();
 }
 
 function highlightReconTreeSelection() {
@@ -3877,8 +4012,325 @@ function highlightReconTreeSelection() {
   if(node) node.classList.add('selected');
 }
 
+function toggleOverrideTable(enabled) {
+  const btn = document.getElementById("recon-override-toggle-btn");
+  const card = document.getElementById("recon-override-card");
+  const grid = document.getElementById("recon-detail-grid");
+  const chk = document.getElementById("recon-add-overrides");
+  if (btn) btn.classList.toggle("fc-active", !!enabled);
+  if (card) card.style.display = enabled ? "block" : "none";
+  if (grid) grid.classList.toggle("override-open", !!enabled);
+  if (chk && chk.checked !== !!enabled) chk.checked = !!enabled;
+}
+
+function getReconOverrideDraft(nodeId) {
+  if (!nodeId) return {};
+  if (!RECON.overrideDrafts[nodeId]) RECON.overrideDrafts[nodeId] = {};
+  return RECON.overrideDrafts[nodeId];
+}
+
+function updateReconOverrideSelectionInfo() {
+  const el = document.getElementById("recon-override-selection-info");
+  if (!el) return;
+  const count = RECON.overrideSelection.timestamps.size;
+  if (!count || !RECON.overrideSelection.source) {
+    el.textContent = "Select baseline or reconciled cells";
+    return;
+  }
+  const label = RECON.overrideSelection.source === "baseline" ? "Baseline" : "Reconciled";
+  el.textContent = `${label} selected · ${count} date${count !== 1 ? "s" : ""}`;
+}
+
+function toggleReconOverrideCellSelection(source, timestamp, value) {
+  if (!timestamp) return;
+  if (RECON.overrideSelection.source && RECON.overrideSelection.source !== source) {
+    RECON.overrideSelection = { nodeId: RECON.selectedNodeId, source, timestamps: new Set(), values: {} };
+  } else if (!RECON.overrideSelection.source) {
+    RECON.overrideSelection.source = source;
+    RECON.overrideSelection.nodeId = RECON.selectedNodeId;
+  }
+
+  if (RECON.overrideSelection.timestamps.has(timestamp)) {
+    RECON.overrideSelection.timestamps.delete(timestamp);
+    delete RECON.overrideSelection.values[timestamp];
+  } else {
+    RECON.overrideSelection.timestamps.add(timestamp);
+    RECON.overrideSelection.values[timestamp] = value;
+  }
+
+  if (!RECON.overrideSelection.timestamps.size) {
+    RECON.overrideSelection = { nodeId: null, source: null, timestamps: new Set(), values: {} };
+  }
+  updateReconOverrideSelectionInfo();
+  populateOverrideTable();
+}
+
+function setReconOverrideDraftValue(timestamp, rawValue) {
+  const nodeId = RECON.selectedNodeId;
+  if (!nodeId || !timestamp) return;
+  const draft = getReconOverrideDraft(nodeId);
+  const value = String(rawValue ?? '').trim();
+  if (value === '') delete draft[timestamp];
+  else {
+    const num = parseFloat(value);
+    if (!Number.isNaN(num)) draft[timestamp] = num;
+  }
+}
+
+function applyOverrideToolbarAction(mode) {
+  const nodeId = RECON.selectedNodeId;
+  if (!nodeId) return;
+  const draft = getReconOverrideDraft(nodeId);
+  const timestamps = Array.from(RECON.overrideSelection.timestamps);
+  if (!timestamps.length) {
+    toast('Select one or more baseline/reconciled dates first', 'info');
+    return;
+  }
+
+  if (mode === 'clear') {
+    timestamps.forEach(ts => { delete draft[ts]; });
+    populateOverrideTable();
+    return;
+  }
+
+  const raw = document.getElementById("recon-override-toolbar-value")?.value?.trim();
+  const num = parseFloat(raw || '');
+  if (raw === '' || Number.isNaN(num)) {
+    toast('Enter a valid toolbar value first', 'err');
+    return;
+  }
+
+  timestamps.forEach(ts => {
+    const sourceVal = RECON.overrideSelection.values[ts];
+    if (mode === 'pct') {
+      if (sourceVal == null || Number.isNaN(sourceVal)) return;
+      draft[ts] = round4(sourceVal * (1 + num / 100));
+    } else draft[ts] = round4(num);
+  });
+  populateOverrideTable();
+}
+
+// Build a transposed override table for the selected node
+function populateOverrideTable(_forecastPreview, overrideLog = [], appliedOverrides = []) {
+  const tbody = document.getElementById("recon-override-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (!RECON.result || !RECON.selectedNodeId) return;
+
+  const preview = (RECON.result.node_previews || {})[RECON.selectedNodeId];
+  const meta = (RECON.result.preview_nodes || []).find(n => n.node_id === RECON.selectedNodeId) || {};
+  if (!preview) return;
+  if (RECON.overrideSelection.nodeId && RECON.overrideSelection.nodeId !== RECON.selectedNodeId) {
+    RECON.overrideSelection = { nodeId: null, source: null, timestamps: new Set(), values: {} };
+  }
+  setHtml("recon-override-subtitle", escapeHtml(meta.display_path || meta.label || RECON.selectedNodeId));
+
+  const histN = preview.history_n || 0;
+  const labels = (preview.labels || []).slice(histN);
+  const baseVals = (preview.base_forecast || []).slice(histN);
+  const reconVals = (preview.future || []).slice(histN);
+
+  const draft = getReconOverrideDraft(RECON.selectedNodeId);
+  overrideLog.forEach(ov => {
+    if (ov && ov.timestamp && ov.value != null) draft[ov.timestamp] = ov.value;
+  });
+  (appliedOverrides || []).forEach(ov => {
+    if (ov && ov.timestamp && ov.override_value != null) draft[ov.timestamp] = ov.override_value;
+  });
+  const appliedSet = new Set(Object.keys(draft));
+
+  const headerCells = labels.map(timestamp => {
+    const appliedCls = appliedSet.has(timestamp) ? " applied" : "";
+    return `<th class="override-date-head${appliedCls}" scope="col">${escapeHtml(timestamp)}</th>`;
+  }).join("");
+
+  const baselineCells = labels.map((timestamp, idx) => {
+    const appliedCls = appliedSet.has(timestamp) ? " applied" : "";
+    const selectedCls = RECON.overrideSelection.source === "baseline" && RECON.overrideSelection.timestamps.has(timestamp) ? " selected" : "";
+    return `<td class="override-cell override-readonly override-source-cell${appliedCls}${selectedCls}" onclick="toggleReconOverrideCellSelection('baseline','${escapeHtml(timestamp)}',${baseVals[idx] ?? 'null'})">${baseVals[idx] ?? "-"}</td>`;
+  }).join("");
+
+  const reconCells = labels.map((timestamp, idx) => {
+    const appliedCls = appliedSet.has(timestamp) ? " applied" : "";
+    const selectedCls = RECON.overrideSelection.source === "reconciled" && RECON.overrideSelection.timestamps.has(timestamp) ? " selected" : "";
+    return `<td class="override-cell override-readonly override-source-cell${appliedCls}${selectedCls}" onclick="toggleReconOverrideCellSelection('reconciled','${escapeHtml(timestamp)}',${reconVals[idx] ?? 'null'})">${reconVals[idx] ?? "-"}</td>`;
+  }).join("");
+
+  const valueCells = labels.map(timestamp => {
+    const appliedCls = appliedSet.has(timestamp) ? " applied" : "";
+    const val = draft[timestamp] ?? "";
+    return `<td class="override-cell${appliedCls}">
+      <input type="number" class="form-control override-value override-input" data-timestamp="${escapeHtml(timestamp)}" value="${val}" placeholder="Value" oninput="setReconOverrideDraftValue('${escapeHtml(timestamp)}', this.value)">
+    </td>`;
+  }).join("");
+
+  tbody.innerHTML = `
+    <tr>
+      <th class="override-row-head" scope="col">Metric</th>
+      ${headerCells}
+    </tr>
+    <tr>
+      <th class="override-row-head" scope="row">Baseline Forecast</th>
+      ${baselineCells}
+    </tr>
+    <tr>
+      <th class="override-row-head" scope="row">Reconciled Forecast</th>
+      ${reconCells}
+    </tr>
+    <tr>
+      <th class="override-row-head" scope="row">Override Value</th>
+      ${valueCells}
+    </tr>
+  `;
+  updateReconOverrideSelectionInfo();
+}
+
+// Collect overrides from table
+function collectOverrides() {
+  const nodeId = RECON.selectedNodeId;
+  const draft = getReconOverrideDraft(nodeId);
+  const overrides = Object.entries(draft).map(([timestamp, value]) => ({ timestamp, value }));
+
+  return { nodeId, overrides };
+}
+
+// Update info text with summary
+function updateOverrideInfoLegacy(appliedOverrides, strategy, nodeId) {
+  const infoEl = document.getElementById("recon-override-info");
+  if (!infoEl) return;
+  const count = (appliedOverrides || []).length;
+  const now = new Date();
+  const formattedTime = new Intl.DateTimeFormat("en-IN", {
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata", hour12: false
+  }).format(now);
+
+  infoEl.innerText =
+    `${count} override${count !== 1 ? "s" : ""} applied · Strategy: ${strategy} · Last updated at ${formattedTime} IST`;
+}
+
+// Call backend to reconcile overrides
+async function runReconcileOverridesLegacy() {
+  const token = window.reconToken;
+  const strategy = document.getElementById("recon-strategy").value;
+  const middleLevel = document.getElementById("recon-middle-level").value || null;
+  const horizon = parseInt(document.getElementById("recon-horizon").value, 10);
+  const allowNeg = document.getElementById("recon-neg-allowed").checked;
+
+  const overrides = collectOverrides();
+  if (!overrides.length) {
+    alert("No overrides specified.");
+    return;
+  }
+
+  document.getElementById("recon-loader").style.display = "block";
+  document.getElementById("recon-loader-msg").innerText = "Reconciling overrides...";
+
+  try {
+    const resp = await ("/api/reconcile-overrides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, strategy, middle_level: middleLevel, horizon, allow_negative_forecast: allowNeg, overrides })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+
+    // Merge override forecasts into reconData
+    Object.entries(data.node_previews || {}).forEach(([nodeId, preview]) => {
+      if (window.reconData.node_previews[nodeId]) {
+        window.reconData.node_previews[nodeId].override_forecast = preview.override_forecast;
+      } else {
+        window.reconData.node_previews[nodeId] = preview;
+      }
+    });
+
+    // Update table + info
+    populateOverrideTable(data.forecast_preview, data.override_log);
+    updateOverrideInfo(data.override_log, data.strategy);
+
+    // Refresh charts
+    renderReconSelectedNode();
+    const selectedNodeId = document.getElementById("recon-node-select").value;
+    if (selectedNodeId) renderFamilyContext(selectedNodeId);
+
+    document.getElementById("recon-report").innerText = data.report;
+    document.getElementById("recon-loader").style.display = "none";
+  } catch (err) {
+    console.error(err);
+    alert("Override reconciliation failed: " + err.message);
+    document.getElementById("recon-loader").style.display = "none";
+  }
+}
+
 // TAB 5 — LEVEL STABILITY ANALYSIS
 // ════════════════════════════════════════════════════════════
+
+function updateOverrideInfo(appliedOverrides, strategy, nodeId) {
+  const infoEl = document.getElementById("recon-override-info");
+  if (!infoEl) return;
+  const count = (appliedOverrides || []).length;
+  const now = new Date();
+  const formattedTime = new Intl.DateTimeFormat("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+    hour12: false
+  }).format(now);
+  infoEl.innerText = `${count} override${count !== 1 ? "s" : ""} applied for ${nodeId || "selected node"} · Strategy: ${strategy} · Last updated at ${formattedTime} IST`;
+}
+
+async function runReconcileOverrides() {
+  const token = S.token;
+  const strategy = document.getElementById("recon-strategy")?.value || "bottom_up";
+  const middleLevel = document.getElementById("recon-middle-level")?.value || null;
+  const allowNeg = document.getElementById("recon-neg-allowed")?.checked || false;
+  const { nodeId, overrides } = collectOverrides();
+
+  if (!token || !nodeId) {
+    alert("Run reconciled forecast and select a node first.");
+    return;
+  }
+  if (!overrides.length) {
+    alert("No overrides specified for the selected node.");
+    return;
+  }
+
+  show("recon-loader");
+  const loaderMsg = document.getElementById("recon-loader-msg");
+  if (loaderMsg) loaderMsg.innerText = "Reconciling overrides...";
+
+  try {
+    const data = await api("/api/reconcile-overrides", {
+      token,
+      node_id: nodeId,
+      overrides,
+      strategy,
+      middle_level: middleLevel,
+      allow_negative_forecast: allowNeg
+    });
+
+    Object.entries(data.override_previews || {}).forEach(([nid, preview]) => {
+      RECON.result.node_previews[nid] = {
+        ...(RECON.result.node_previews[nid] || {}),
+        ...preview
+      };
+    });
+
+    const draft = getReconOverrideDraft(nodeId);
+    (data.applied_overrides || []).forEach(ov => {
+      if (ov && ov.timestamp && ov.override_value != null) draft[ov.timestamp] = ov.override_value;
+    });
+
+    renderReconSelectedNode();
+    populateOverrideTable(null, [], data.applied_overrides || []);
+    updateOverrideInfo(data.applied_overrides || [], data.strategy, data.node_id);
+  } catch (err) {
+    console.error(err);
+    alert("Override reconciliation failed: " + err.message);
+  } finally {
+    hide("recon-loader");
+  }
+}
 
 const STAB = {
   interval: 'W',
