@@ -743,6 +743,8 @@ async def reconcile_overrides(body: ReconcileOverridesReq):
         })
 
     overrides_by_node[node_id] = node_overrides
+    if not node_overrides:
+        overrides_by_node.pop(node_id, None)
 
     # ── Start with the reconciled forecast as the base for overrides ──────────
     override_fc: Dict[str, np.ndarray] = {

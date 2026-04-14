@@ -307,6 +307,8 @@ tr:hover td{background:rgba(59,130,246,.04);color:var(--tx)}
 .vtree-node:hover .vtree-label{background:rgba(59,130,246,.08);color:var(--tx)}
 .vtree-node.selected .vtree-label{background:rgba(59,130,246,.15);color:var(--a1);border:1px solid rgba(59,130,246,.3)}
 .vtree-node.leaf .vtree-label{color:var(--a3)}
+.vtree-node.has-override .vtree-label{border:1px dashed rgba(239,68,68,.45);background:rgba(239,68,68,.06)}
+.vtree-override-badge{margin-left:6px;font-size:10px;letter-spacing:.2px;font-family:'IBM Plex Mono',monospace;color:#ef4444;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);padding:1px 6px;border-radius:999px}
 .vtree-children{margin-left:20px;display:none}
 .vtree-children.open{display:block}
 .vtree-count{font-size:10px;color:var(--tx3);margin-left:5px}
@@ -1188,7 +1190,10 @@ canvas {
             <div class="card-title" style="margin-bottom:3px">Override Forecast</div>
             <div class="override-card-sub" id="recon-override-subtitle">Selected node override editor</div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="runReconcileOverrides()">▶ Reconcile Overrides</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="clearReconOverridesForNode()">Clear Node Overrides</button>
+            <button class="btn btn-primary btn-sm" onclick="runReconcileOverrides()">▶ Reconcile Overrides</button>
+          </div>
         </div>
         <div class="override-legend">
           <span>🔴 Highlighted dates</span> indicate overrides already applied to the selected node.
@@ -3245,8 +3250,14 @@ function syncReconOverrideUi(r) {
 }
 
 function applyOverridesByNode(overridesByNode) {
-  if (!overridesByNode) return;
-  Object.entries(overridesByNode || {}).forEach(([nodeId, ovMap]) => {
+  RECON.appliedOverridesByNode = {};
+  const incoming = overridesByNode || {};
+  Object.keys(RECON.overrideDrafts || {}).forEach(nodeId => {
+    if (!(nodeId in incoming)) {
+      RECON.overrideDrafts[nodeId] = {};
+    }
+  });
+  Object.entries(incoming).forEach(([nodeId, ovMap]) => {
     const draft = getReconOverrideDraft(nodeId);
     const normalized = ovMap || {};
     Object.keys(draft).forEach(ts => {
@@ -3261,6 +3272,30 @@ function applyOverridesByNode(overridesByNode) {
       timestamp: ts,
       override_value: Number(val),
     }));
+  });
+  updateReconTreeOverrideBadges();
+}
+
+function updateReconTreeOverrideBadges() {
+  const root = document.getElementById('recon-tree-root');
+  if (!root) return;
+  root.querySelectorAll('.vtree-node').forEach(row => {
+    const nodeId = row.dataset.nodeId;
+    const label = row.querySelector('.vtree-label');
+    if (!nodeId || !label) return;
+    const overrideCount = (RECON.appliedOverridesByNode?.[nodeId] || []).length;
+    row.classList.toggle('has-override', !!overrideCount);
+    let badge = label.querySelector('.vtree-override-badge');
+    if (overrideCount && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'vtree-override-badge';
+      badge.textContent = `OVR ${overrideCount}`;
+      label.appendChild(badge);
+    } else if (!overrideCount && badge) {
+      badge.remove();
+    } else if (overrideCount && badge) {
+      badge.textContent = `OVR ${overrideCount}`;
+    }
   });
 }
 
@@ -3999,7 +4034,10 @@ function createReconTreeNode(node, byParent, depth) {
   const label=document.createElement('div');
   label.className='vtree-label';
   const countHtml=children.length ? `<span class="vtree-count">${children.length}</span>` : '';
-  label.innerHTML=`${escapeHtml(node.node_value||node.label||node.node_id)}${countHtml}`;
+  const overrideCount = (RECON.appliedOverridesByNode?.[node.node_id] || []).length;
+  const badgeHtml = overrideCount ? `<span class="vtree-override-badge">OVR ${overrideCount}</span>` : '';
+  label.innerHTML=`${escapeHtml(node.node_value||node.label||node.node_id)}${countHtml}${badgeHtml}`;
+  if (overrideCount) row.classList.add('has-override');
   row.appendChild(label);
   row.onclick=()=>selectReconNodeFromTree(node.node_id, node.level_name);
   wrap.appendChild(row);
@@ -4354,6 +4392,59 @@ async function runReconcileOverrides() {
   } catch (err) {
     console.error(err);
     alert("Override reconciliation failed: " + err.message);
+  } finally {
+    hide("recon-loader");
+  }
+}
+
+async function clearReconOverridesForNode() {
+  const token = S.token;
+  const nodeId = RECON.selectedNodeId;
+  const strategy = document.getElementById("recon-strategy")?.value || "bottom_up";
+  const middleLevel = document.getElementById("recon-middle-level")?.value || null;
+  const allowNeg = document.getElementById("recon-neg-allowed")?.checked || false;
+
+  if (!token || !nodeId) {
+    alert("Run reconciled forecast and select a node first.");
+    return;
+  }
+  const label = (RECON.result?.preview_nodes || []).find(n => n.node_id === nodeId)?.display_path
+    || (RECON.result?.preview_nodes || []).find(n => n.node_id === nodeId)?.label
+    || nodeId;
+  if (!confirm(`Clear all overrides for ${label}? This cannot be undone.`)) return;
+
+  show("recon-loader");
+  const loaderMsg = document.getElementById("recon-loader-msg");
+  if (loaderMsg) loaderMsg.innerText = "Clearing overrides...";
+
+  try {
+    const data = await api("/api/reconcile-overrides", {
+      token,
+      node_id: nodeId,
+      overrides: [],
+      strategy,
+      middle_level: middleLevel,
+      allow_negative_forecast: allowNeg
+    });
+
+    Object.entries(data.override_previews || {}).forEach(([nid, preview]) => {
+      RECON.result.node_previews[nid] = {
+        ...(RECON.result.node_previews[nid] || {}),
+        ...preview
+      };
+    });
+
+    const draft = getReconOverrideDraft(nodeId);
+    Object.keys(draft).forEach(ts => { delete draft[ts]; });
+    RECON.appliedOverridesByNode[nodeId] = [];
+    applyOverridesByNode(data.overrides_by_node);
+
+    renderReconSelectedNode();
+    populateOverrideTable(null, [], []);
+    updateOverrideInfo([], data.strategy, data.node_id);
+  } catch (err) {
+    console.error(err);
+    alert("Clear overrides failed: " + err.message);
   } finally {
     hide("recon-loader");
   }
