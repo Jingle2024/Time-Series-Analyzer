@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAppState } from '../../context/AppContext';
+import { useAppState } from '../../hooks/useAppState';
 import { apiCall } from '../../services/api';
 import { fmtNum, formatShort, stdDev, STAB_PALETTE } from '../../utils/helpers';
 import { Alert, Loader, DataTable } from '../shared/UI';

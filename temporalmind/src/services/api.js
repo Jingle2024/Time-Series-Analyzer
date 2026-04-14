@@ -1,4 +1,5 @@
-import { API_BASE } from '../context/AppContext';
+// export const API_BASE = "https://goldfish-app-avb6e.ondigitalocean.app";
+export const API_BASE = 'http://127.0.0.1:8080';
 
 /**
  * Generic JSON API call (POST by default).

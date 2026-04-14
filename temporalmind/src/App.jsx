@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AppProvider, useAppState } from './context/AppContext';
+import { AppProvider } from './context/AppContext';
+import { useAppState } from './hooks/useAppState';
 import { checkHealth } from './services/api';
 import { useToast } from './hooks/useToast';
 import Header from './components/layout/Header';

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useAppState } from '../../context/AppContext';
+import { useAppState } from '../../hooks/useAppState';
 import { uploadFile, confirmSchema } from '../../services/api';
 import { Alert, StatCard, DataTable, Loader } from '../shared/UI';
 import styles from './UploadTab.module.css';
