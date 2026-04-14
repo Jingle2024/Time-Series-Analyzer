@@ -574,6 +574,24 @@ canvas {
           <div id="cascade-dropdowns" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end"></div>
         </div>
 
+        <div class="form-group" style="flex:0 0 160px;margin:0">
+          <label class="form-label">Interval Mode</label>
+          <select class="form-control" id="analyze-interval-mode" onchange="setAnalyzeIntervalMode()">
+            <option value="session">Use Session Interval</option>
+            <option value="manual">Manual Interval</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 150px;margin:0">
+          <label class="form-label">Manual Interval</label>
+          <select class="form-control" id="analyze-target-freq" disabled>
+            <option value="D">Daily (D)</option>
+            <option value="W">Weekly (W)</option>
+            <option value="MS" selected>Monthly (MS)</option>
+            <option value="QS">Quarterly (QS)</option>
+            <option value="AS">Yearly (AS)</option>
+          </select>
+        </div>
+
         <button class="btn btn-primary" onclick="runAnalysis()" id="run-analysis-btn">▶ Run Analysis</button>
       </div>
     </div>
@@ -1766,6 +1784,7 @@ function initAnalyzerTab() {
   sel.innerHTML=S.valueCols.map(c=>`<option value="${c}">${c}</option>`).join('');
   // default to single mode
   setAnalyzeMode(S.isHierarchy ? 'hierarchy' : 'single');
+  setAnalyzeIntervalMode();
 }
 
 function setAnalyzeMode(mode) {
@@ -1782,6 +1801,21 @@ function setAnalyzeMode(mode) {
     hide('single-controls'); show('hier-node-controls'); show('hier-tree-section');
     loadHierarchyTree();
   }
+}
+
+function setAnalyzeIntervalMode() {
+  const modeSel = document.getElementById('analyze-interval-mode');
+  const freqSel = document.getElementById('analyze-target-freq');
+  const mode = modeSel?.value || 'session';
+  const sessionFreq = S.targetFreq || S.detectedFreq;
+  if (modeSel && modeSel.options?.length) {
+    const sessionOpt = [...modeSel.options].find(o => o.value === 'session');
+    if (sessionOpt) sessionOpt.textContent = sessionFreq ? `Use Session Interval (${sessionFreq})` : 'Use Session Interval';
+  }
+  if (freqSel && sessionFreq && [...freqSel.options].some(opt => opt.value === sessionFreq) && mode === 'session') {
+    freqSel.value = sessionFreq;
+  }
+  if (freqSel) freqSel.disabled = (mode !== 'manual');
 }
 
 // ─── HIERARCHY TREE LOADING ───────────────────────────────
@@ -2131,11 +2165,17 @@ async function runAnalysis() {
       r=await api('/api/analyze-node',{
         token:S.token, node_path:S.currentNodePath,
         value_col:valCol, period, agg_method:agg,
+        interval_mode:document.getElementById('analyze-interval-mode')?.value || 'session',
+        target_freq:document.getElementById('analyze-target-freq')?.value || null,
       });
     } else {
       const seriesKey=document.getElementById('analyze-series-select').value;
       const period=parseInt(document.getElementById('analyze-period').value)||null;
-      r=await api('/api/analyze',{token:S.token,series_key:seriesKey,period});
+      r=await api('/api/analyze',{
+        token:S.token,series_key:seriesKey,period,
+        interval_mode:document.getElementById('analyze-interval-mode')?.value || 'session',
+        target_freq:document.getElementById('analyze-target-freq')?.value || null,
+      });
     }
     renderAnalysis(r);
     show('analyze-results');
@@ -2154,6 +2194,7 @@ function renderAnalysis(r) {
   if(s.node_label){
     const isLeaf=s.is_leaf;
     const agg=s.agg_method;
+    const freqBadge = s.chosen_freq ? `<span class="chip chip-violet" style="margin-left:6px">Interval: ${escapeHtml(s.chosen_freq)}</span>` : '';
     bannerHtml=`<div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span style="font-size:14px">🌲</span>
       <div>
@@ -2165,6 +2206,17 @@ function renderAnalysis(r) {
         </div>
       </div>
       <span class="chip chip-violet" style="margin-left:auto">${isLeaf?'Leaf':'Aggregate'}</span>
+      ${freqBadge}
+    </div>`;
+  } else if (s.series_label) {
+    const freqBadge = s.chosen_freq ? `<span class="chip chip-violet" style="margin-left:6px">Interval: ${escapeHtml(s.chosen_freq)}</span>` : '';
+    bannerHtml=`<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:14px">📈</span>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--a1)">${escapeHtml(s.series_label)}</div>
+        <div style="font-size:12px;color:var(--tx2);margin-top:2px">Single series analysis</div>
+      </div>
+      ${freqBadge}
     </div>`;
   }
   setHtml('analysis-context-banner',bannerHtml);

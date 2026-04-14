@@ -25,6 +25,7 @@ from agents.multi_variable_agent import (
     MultiVariableAgent,
 )
 from agents.outlier_detection_agent import OutlierDetectionAgent
+from agents.accumulation_agent import AccumulationAgent
 from core.context_store import ContextStore
 from core.runtime import SESSIONS as _sessions
 from utils.api_helper import _safe, _series_stats
@@ -38,6 +39,8 @@ class AnalyzeReq(BaseModel):
     token:      str
     series_key: Optional[str] = None   # None → first value col of accumulated df
     period:     Optional[int] = None
+    interval_mode: str = "session"     # session | manual
+    target_freq: Optional[str] = None
 
 
 @router.post("/api/analyze")
@@ -46,14 +49,41 @@ async def analyze(body: AnalyzeReq):
     if not sess or "df" not in sess:
         raise HTTPException(404)
 
-    work_df  = sess.get("accumulated_df", sess["df"])
-    val_cols = sess.get("value_cols", work_df.select_dtypes("number").columns.tolist())
+    native_df = sess["df"]
+    session_df = sess.get("accumulated_df", native_df)
+    val_cols = sess.get("value_cols", native_df.select_dtypes("number").columns.tolist())
 
-    if body.series_key and body.series_key in work_df.columns:
-        series = work_df[body.series_key].dropna()
+    col = None
+    if body.series_key and body.series_key in native_df.columns:
+        col = body.series_key
     else:
-        col    = val_cols[0] if val_cols else work_df.columns[0]
-        series = work_df[col].dropna()
+        col = val_cols[0] if val_cols else native_df.columns[0]
+
+    interval_mode = (body.interval_mode or "session").lower().strip()
+    chosen_freq = sess.get("target_freq") or sess.get("detected_freq")
+
+    if interval_mode == "manual" and body.target_freq:
+        chosen_freq = str(body.target_freq).strip()
+        df_to_acc = native_df[[col]].copy()
+        try:
+            result = AccumulationAgent().execute(
+                df=df_to_acc,
+                target_freq=chosen_freq,
+                method="auto",
+                quantity_type="flow",
+                value_cols=[col],
+            )
+        except Exception as e:
+            raise HTTPException(500, f"Accumulation failed: {e}")
+        if not result.ok:
+            raise HTTPException(500, result.errors[0])
+        work_df = result.data
+    else:
+        work_df = session_df
+        if col not in work_df.columns:
+            work_df = native_df
+
+    series = work_df[col].dropna()
 
     ctx = ContextStore()
 
@@ -90,6 +120,8 @@ async def analyze(body: AnalyzeReq):
 
     summary = {
         "series_stats": _safe(_series_stats(clean)),
+        "chosen_freq": chosen_freq,
+        "series_label": col,
         "decomp": _safe({
             "trend_strength_Ft":    decomp_res.metadata.get("trend_strength_Ft"),
             "seasonal_strength_Fs": decomp_res.metadata.get("seasonal_strength_Fs"),

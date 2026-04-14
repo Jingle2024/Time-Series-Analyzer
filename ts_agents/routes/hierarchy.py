@@ -24,6 +24,7 @@ from agents.hierarchy_aggregation_agent import HierarchyAggregationAgent
 from agents.intermittency_agent import IntermittencyAgent
 from agents.missing_values_agent import MissingValuesAgent
 from agents.outlier_detection_agent import OutlierDetectionAgent
+from agents.accumulation_agent import AccumulationAgent
 from core.context_store import ContextStore
 from core.runtime import SESSIONS as _sessions
 from utils.api_helper import (
@@ -205,6 +206,23 @@ class AnalyzeNodeReq(BaseModel):
     agg_method:       str  = "sum"
     safe_mode:        bool = True
     max_chart_points: int  = DEFAULT_MAX_CHART_POINTS
+    interval_mode:    str  = "session"  # session | manual
+    target_freq:      Optional[str] = None
+
+
+def _accumulate_series(series: pd.Series, target_freq: str) -> pd.Series:
+    name = series.name or "value"
+    df = pd.DataFrame({name: series})
+    result = AccumulationAgent().execute(
+        df=df,
+        target_freq=target_freq,
+        method="auto",
+        quantity_type="flow",
+        value_cols=[name],
+    )
+    if not result.ok:
+        raise RuntimeError(result.errors[0] if result.errors else "Accumulation failed")
+    return result.data[name].dropna()
 
 
 @router.post("/api/analyze-node")
@@ -246,6 +264,16 @@ async def analyze_node(body: AnalyzeNodeReq):
     series.name = val_col
     if len(series) < 4:
         raise HTTPException(400, f"Too few data points ({len(series)}) for: {node_label}")
+
+    interval_mode = (body.interval_mode or "session").lower().strip()
+    chosen_freq = sess.get("target_freq") or sess.get("detected_freq")
+    if interval_mode == "manual" and body.target_freq:
+        chosen_freq = str(body.target_freq).strip()
+    if chosen_freq and (interval_mode == "manual" or sess.get("target_freq")):
+        try:
+            series = _accumulate_series(series, chosen_freq)
+        except Exception as e:
+            raise HTTPException(500, f"Accumulation failed: {e}")
 
     n_agg = 1
     if remaining_hier:
@@ -324,6 +352,7 @@ async def analyze_node(body: AnalyzeNodeReq):
         "safe_mode_used":     use_safe_mode,
         "analysis_mode":      "lightweight" if use_safe_mode else "full",
         "series_stats":       _safe(_series_stats(clean)),
+        "chosen_freq":        chosen_freq,
         "decomp": _safe({
             "trend_strength_Ft":    decomp_res.metadata.get("trend_strength_Ft"),
             "seasonal_strength_Fs": decomp_res.metadata.get("seasonal_strength_Fs"),
