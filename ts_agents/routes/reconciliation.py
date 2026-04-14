@@ -115,6 +115,41 @@ def _make_future_index(index: pd.DatetimeIndex, freq: Optional[str], horizon: in
     return pd.date_range(index[-1], periods=horizon + 1, freq=freq_use)[1:]
 
 
+def _override_snapshot_compatible(
+    override_snap: Optional[Dict[str, Any]],
+    future_idx: pd.DatetimeIndex,
+    chosen_freq: Optional[str],
+    hier_cols: List[str],
+    ordered_levels: List[str],
+    strategy: str,
+    middle_level: Optional[str],
+    node_meta: Dict[str, Dict[str, Any]],
+) -> bool:
+    if not override_snap:
+        return False
+    if override_snap.get("chosen_freq") != chosen_freq:
+        return False
+    if override_snap.get("hier_cols") != hier_cols:
+        return False
+    if override_snap.get("ordered_levels") != ordered_levels:
+        return False
+    if (override_snap.get("strategy") or "bottom_up") != strategy:
+        return False
+    if (override_snap.get("middle_level") or None) != (middle_level or None):
+        return False
+    snap_future = override_snap.get("future_idx")
+    if not isinstance(snap_future, pd.DatetimeIndex):
+        return False
+    snap_labels = [str(d)[:10] for d in snap_future]
+    new_labels = [str(d)[:10] for d in future_idx]
+    if snap_labels != new_labels:
+        return False
+    snap_meta = override_snap.get("node_meta") or {}
+    if set(snap_meta.keys()) != set(node_meta.keys()):
+        return False
+    return True
+
+
 def _forecast_series_auto(
     series: pd.Series,
     horizon: int,
@@ -279,6 +314,47 @@ def _allocate_down(
             w = weight_map.get((parent_id, child_id), 0.0)
             forecasts[child_id] = parent_fc * float(w)
             stack.append(child_id)
+
+
+def _allocate_down_with_locks(
+    root_ids: List[str],
+    forecasts: Dict[str, np.ndarray],
+    children_by_node: Dict[str, List[str]],
+    weight_map: Dict[Tuple[str, str], float],
+    locked_nodes: set,
+) -> None:
+    stack = list(root_ids)
+    visited = set()
+    while stack:
+        parent_id = stack.pop()
+        if parent_id in visited:
+            continue
+        visited.add(parent_id)
+        parent_fc = forecasts.get(parent_id)
+        if parent_fc is None:
+            continue
+        child_ids = children_by_node.get(parent_id, [])
+        if not child_ids:
+            continue
+        locked_children = [cid for cid in child_ids if cid in locked_nodes]
+        unlocked_children = [cid for cid in child_ids if cid not in locked_nodes]
+        if unlocked_children:
+            weights = [weight_map.get((parent_id, cid), 0.0) for cid in unlocked_children]
+            w_total = float(sum(weights))
+            if w_total <= 0:
+                weights = [1.0] * len(unlocked_children)
+                w_total = float(len(unlocked_children))
+            locked_sum = np.zeros_like(parent_fc)
+            for cid in locked_children:
+                child_fc = forecasts.get(cid)
+                if child_fc is not None:
+                    locked_sum = locked_sum + child_fc
+            remaining = parent_fc - locked_sum
+            for cid, w in zip(unlocked_children, weights):
+                forecasts[cid] = remaining * float(w / w_total)
+                stack.append(cid)
+        for cid in locked_children:
+            stack.append(cid)
 
 
 def _render_reconciliation_report(
@@ -457,6 +533,20 @@ async def reconciled_forecast(body: ReconciledForecastReq):
                 "forecast": val,
             })
 
+    override_snap = sess.get("override_snapshot")
+    if _override_snapshot_compatible(
+        override_snap, future_idx, chosen_freq, hier_cols, ordered_levels, strategy, middle_level, node_meta
+    ):
+        override_previews = (override_snap or {}).get("override_previews") or {}
+        for nid, preview in node_previews.items():
+            ov = override_previews.get(nid) or {}
+            if ov.get("override_forecast") is not None:
+                preview["override_forecast"] = ov.get("override_forecast")
+                if "override_future_vals" in ov:
+                    preview["override_future_vals"] = ov.get("override_future_vals")
+    else:
+        sess.pop("override_snapshot", None)
+
     summary_rows = []
     for node_id in all_node_ids:
         meta = node_meta[node_id]
@@ -529,6 +619,7 @@ async def reconciled_forecast(body: ReconciledForecastReq):
         "node_previews": _safe(node_previews),
         "forecast_preview": _safe(forecast_rows[:500]),
         "node_summary_preview": _safe(summary_rows[:300]),
+        "overrides_by_node": _safe((override_snap or {}).get("overrides_by_node") or {}),
         "overrides_enabled": True,
         "download_token": export_token,
         "download_ext": download_ext,
@@ -604,13 +695,21 @@ async def reconcile_overrides(body: ReconcileOverridesReq):
     # ── Build label→index map for the forecast window ─────────────────────────
     label_to_idx: Dict[str, int] = {lbl: i for i, lbl in enumerate(future_labels)}
 
-    # ── Start with the reconciled forecast as the base for overrides ──────────
-    override_fc: Dict[str, np.ndarray] = {
-        nid: arr.copy() for nid, arr in reconciled_fc.items()
-    }
+    override_snap = sess.get("override_snapshot")
+    overrides_by_node: Dict[str, Dict[str, float]] = {}
+    if _override_snapshot_compatible(
+        override_snap, future_idx, chosen_freq, hier_cols, ordered_levels, strategy, body.middle_level, node_meta
+    ):
+        raw_map = (override_snap or {}).get("overrides_by_node") or {}
+        overrides_by_node = {
+            str(nid): {str(ts): float(val) for ts, val in (ov_map or {}).items()}
+            for nid, ov_map in raw_map.items()
+        }
+    else:
+        sess.pop("override_snapshot", None)
 
     # Apply each override to the target node's forecast array
-    node_arr = override_fc[node_id].copy()
+    node_overrides: Dict[str, float] = {}
     applied: List[Dict[str, Any]] = []
     for ov in body.overrides:
         ts = ov.timestamp[:10]
@@ -635,7 +734,7 @@ async def reconcile_overrides(body: ReconcileOverridesReq):
         if not body.allow_negative_forecast:
             new_val = max(0.0, new_val)
 
-        node_arr[idx] = round(new_val, 6)
+        node_overrides[ts] = round(float(new_val), 6)
         applied.append({
             "timestamp": ts,
             "original_base":       round(base_val,  4),
@@ -643,47 +742,42 @@ async def reconcile_overrides(body: ReconcileOverridesReq):
             "override_value":      round(new_val,   4),
         })
 
-    override_fc[node_id] = node_arr
+    overrides_by_node[node_id] = node_overrides
+
+    # ── Start with the reconciled forecast as the base for overrides ──────────
+    override_fc: Dict[str, np.ndarray] = {
+        nid: arr.copy() for nid, arr in reconciled_fc.items()
+    }
+    for nid, ov_map in overrides_by_node.items():
+        if nid not in override_fc:
+            continue
+        node_arr = override_fc[nid].copy()
+        for ts, val in ov_map.items():
+            idx = label_to_idx.get(ts)
+            if idx is None:
+                continue
+            node_arr[idx] = round(float(val), 6)
+        override_fc[nid] = node_arr
 
     # ── Re-propagate through hierarchy ────────────────────────────────────────
     weight_map = _child_weight_map(histories, children_by_node)
     leaf_level = hier_cols[-1] if hier_cols else ""
     leaf_ids   = level_nodes.get(leaf_level, [])
+    locked_nodes = set(overrides_by_node.keys())
 
     if strategy == "bottom_up":
-        # If the overridden node is a leaf, just re-aggregate upward.
-        # If it's an aggregate node, we distribute the change down to leaves
-        # proportionally then re-aggregate up.
-        if node_id in leaf_ids:
-            _aggregate_up(override_fc, children_by_node, level_nodes, ordered_levels)
-        else:
-            # Determine what the old total was for children vs the new total
-            old_total = float(np.sum(reconciled_fc[node_id]))
-            new_total = float(np.sum(override_fc[node_id]))
-            if abs(old_total) > 1e-9:
-                scale = new_total / old_total
-            else:
-                scale = 1.0
-            # Scale all descendants by the ratio
-            def _scale_descendants(parent: str) -> None:
-                for child in children_by_node.get(parent, []):
-                    override_fc[child] = override_fc[child] * scale
-                    _scale_descendants(child)
-            _scale_descendants(node_id)
-            _aggregate_up(override_fc, children_by_node, level_nodes, ordered_levels)
-
+        if locked_nodes:
+            _allocate_down_with_locks(list(locked_nodes), override_fc, children_by_node, weight_map, locked_nodes)
+        _aggregate_up(override_fc, children_by_node, level_nodes, ordered_levels)
     elif strategy == "top_down":
-        # Lock the override node, re-allocate down from it
-        _allocate_down([node_id], override_fc, children_by_node, weight_map)
-        # Re-aggregate ancestors
+        if locked_nodes:
+            _allocate_down_with_locks(list(locked_nodes), override_fc, children_by_node, weight_map, locked_nodes)
         _aggregate_up(override_fc, children_by_node, level_nodes, ordered_levels)
 
     else:  # middle_out
         middle_level_name = body.middle_level
-        if middle_level_name:
-            anchor_ids = level_nodes.get(middle_level_name, [])
-            # If overridden node is at or above anchor, allocate down then up
-            _allocate_down([node_id], override_fc, children_by_node, weight_map)
+        if middle_level_name and locked_nodes:
+            _allocate_down_with_locks(list(locked_nodes), override_fc, children_by_node, weight_map, locked_nodes)
         _aggregate_up(override_fc, children_by_node, level_nodes, ordered_levels)
 
     # ── Build updated node_previews for the response ─────────────────────────
@@ -699,10 +793,17 @@ async def reconcile_overrides(body: ReconcileOverridesReq):
         }
 
     # ── Persist overrides in session for download ─────────────────────────────
+    applied_overrides_by_node: Dict[str, List[Dict[str, Any]]] = {}
+    for nid, ov_map in overrides_by_node.items():
+        applied_overrides_by_node[nid] = [
+            {"timestamp": ts, "override_value": round(float(val), 4)} for ts, val in ov_map.items()
+        ]
     sess["override_snapshot"] = {
         "override_fc": {nid: arr.copy() for nid, arr in override_fc.items()},
         "override_previews": override_previews,
         "applied_overrides": applied,
+        "applied_overrides_by_node": applied_overrides_by_node,
+        "overrides_by_node": overrides_by_node,
         "future_idx": future_idx,
         "strategy": strategy,
         "middle_level": body.middle_level,
@@ -717,8 +818,10 @@ async def reconcile_overrides(body: ReconcileOverridesReq):
     return {
         "ok": True,
         "applied_overrides": applied,
+        "overrides_by_node": _safe(overrides_by_node),
+        "strategy": strategy,
+        "node_id": node_id,
         "override_previews": _safe(override_previews),
         "download_token": str(uuid.uuid4())[:8],
         "report": f"Overrides applied to node {node_id} using strategy {strategy}.",
     }
-

@@ -3136,6 +3136,7 @@ const RECON = {
   treeExpanded: false,
   visibleSeries: new Set(['history', 'base', 'reconciled', 'override']),
   overrideDrafts: {},
+  appliedOverridesByNode: {},
   overrideSelection: { nodeId: null, source: null, timestamps: new Set(), values: {} },
 };
 
@@ -3227,6 +3228,7 @@ function syncReconOverrideUi(r) {
   const grid = document.getElementById('recon-detail-grid');
   const enabled = !!(r && r.overrides_enabled);
   RECON.overrideDrafts = {};
+  RECON.appliedOverridesByNode = {};
   RECON.overrideSelection = { nodeId: null, source: null, timestamps: new Set(), values: {} };
 
   if (toggleBtn) toggleBtn.style.display = enabled ? 'inline-flex' : 'none';
@@ -3242,6 +3244,26 @@ function syncReconOverrideUi(r) {
   }
 }
 
+function applyOverridesByNode(overridesByNode) {
+  if (!overridesByNode) return;
+  Object.entries(overridesByNode || {}).forEach(([nodeId, ovMap]) => {
+    const draft = getReconOverrideDraft(nodeId);
+    const normalized = ovMap || {};
+    Object.keys(draft).forEach(ts => {
+      if (!(ts in normalized)) delete draft[ts];
+    });
+    Object.entries(normalized).forEach(([ts, val]) => {
+      if (val != null && !Number.isNaN(Number(val))) {
+        draft[ts] = Number(val);
+      }
+    });
+    RECON.appliedOverridesByNode[nodeId] = Object.entries(normalized).map(([ts, val]) => ({
+      timestamp: ts,
+      override_value: Number(val),
+    }));
+  });
+}
+
 function renderReconResults(r) {
   setHtml('recon-stats-row',[
     statCard(String(r.strategy||'').replace('_','-'),'Strategy','', 'var(--a1)'),
@@ -3250,6 +3272,7 @@ function renderReconResults(r) {
     statCard((r.hierarchy_order||[]).length,'Levels',(r.hierarchy_order||[]).join(' → '),'var(--a2)')
   ].join(''));
   syncReconOverrideUi(r);
+  applyOverridesByNode(r.overrides_by_node);
   setHtml('recon-node-summary', buildTable(r.node_summary_preview||[]));
   setHtml('recon-forecast-preview', buildTable(r.forecast_preview||[]));
   setHtml('recon-report', r.report||'');
@@ -4117,6 +4140,9 @@ function populateOverrideTable(_forecastPreview, overrideLog = [], appliedOverri
   tbody.innerHTML = "";
 
   if (!RECON.result || !RECON.selectedNodeId) return;
+  if (!appliedOverrides.length && RECON.appliedOverridesByNode) {
+    appliedOverrides = RECON.appliedOverridesByNode[RECON.selectedNodeId] || [];
+  }
 
   const preview = (RECON.result.node_previews || {})[RECON.selectedNodeId];
   const meta = (RECON.result.preview_nodes || []).find(n => n.node_id === RECON.selectedNodeId) || {};
@@ -4315,6 +4341,7 @@ async function runReconcileOverrides() {
         ...preview
       };
     });
+    applyOverridesByNode(data.overrides_by_node);
 
     const draft = getReconOverrideDraft(nodeId);
     (data.applied_overrides || []).forEach(ov => {
