@@ -833,19 +833,75 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
   <div id="prep-content" style="display:none">
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">Mode &amp; Series</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <button class="btn btn-primary" id="prep-mode-single-btn" onclick="setPrepMode('single')">Single Series</button>
         <button class="btn btn-secondary" id="prep-mode-hier-btn" onclick="setPrepMode('hierarchy')">Hierarchy Node</button>
-      </div>
-      <div class="grid-2">
-        <div class="form-group">
+        <div class="form-group" style="margin:0;flex:0 0 220px">
           <label class="form-label">Dependent Series</label>
           <select class="form-control" id="prep-series-select"></select>
         </div>
-        <div id="prep-hier-wrap" style="display:none">
-          <label class="form-label">Hierarchy Path</label>
-          <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:8px"></div>
-          <div style="font-size:11px;color:var(--tx3);margin-top:6px" id="prep-hier-note"></div>
+      </div>
+
+      <!-- ─── HIERARCHY TREE NAVIGATOR (shown when hierarchy mode) ─── -->
+      <div id="prep-hier-wrap" style="display:none">
+        <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">
+          Select hierarchy node using the visual tree or cascading dropdowns below ↓
+        </div>
+        <div style="display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start">
+
+          <!-- LEFT: tree panel -->
+          <div class="hier-nav-panel">
+            <div class="hier-nav-header">
+              🌲 Hierarchy Navigator
+              <span class="chip chip-violet" style="margin-left:auto" id="prep-tree-total-leaves">0 leaves</span>
+            </div>
+
+            <!-- Visual collapsible tree -->
+            <div class="vis-tree-toggle" onclick="togglePrepVisTree()" id="prep-vis-tree-toggle-btn">
+              <span id="prep-vis-tree-icon">▶</span>
+              <span>Visual Tree</span>
+              <span style="margin-left:auto;font-size:10px">click to expand</span>
+            </div>
+            <div class="vis-tree-wrap" id="prep-vis-tree-wrap" style="display:none">
+              <div id="prep-vis-tree-root"></div>
+            </div>
+
+            <!-- Cascading selects (always visible) -->
+            <div style="padding:14px 16px;border-top:1px solid var(--border)">
+              <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">
+                Cascading Selection
+              </div>
+              <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
+
+            <!-- Breadcrumb of selected path -->
+            <div class="node-breadcrumb" id="prep-node-breadcrumb">
+              <div class="breadcrumb-label">Selected Node</div>
+              <div class="breadcrumb-path" id="prep-breadcrumb-path">
+                <span style="color:var(--tx3);font-size:12px">No node selected yet</span>
+              </div>
+            </div>
+
+            <!-- Node meta info -->
+            <div class="node-meta-row" id="prep-node-meta-row" style="display:none"></div>
+          </div>
+
+          <!-- RIGHT: node summary panel -->
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card">
+              <div class="card-title">📍 Selected Node</div>
+              <div id="prep-node-summary-pre" style="color:var(--tx3);font-size:13px">
+                Select a node from the tree or dropdowns to preview it.
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">⚙ Aggregation Note</div>
+              <div id="prep-hier-note" style="font-size:12px;color:var(--tx2);line-height:1.6">
+                Choose one or more hierarchy levels. Leave lower levels as <em>All</em> to prepare an aggregated forecast.
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -2332,6 +2388,7 @@ function modelFromDecomp(dc,ic) {
 async function initPrepTab(){
   if(!S.token){show('prep-no-data');hide('prep-content');return;}
   hide('prep-no-data'); show('prep-content');
+  S.prepNodePath={};
   await loadSeriesList();
   await setPrepMode(S.isHierarchy ? 'hierarchy' : 'single');
   setPrepIntervalMode();
@@ -2352,7 +2409,14 @@ async function setPrepMode(mode){
   }
   if(S.prepMode === 'hierarchy' && S.isHierarchy){
     show('prep-hier-wrap');
+    // sync total-leaves chip from Analyzer tree if already loaded
+    const leavesChip=document.getElementById('prep-tree-total-leaves');
+    if(leavesChip){
+      const srcChip=document.getElementById('tree-total-leaves');
+      if(srcChip && srcChip.textContent) leavesChip.textContent=srcChip.textContent;
+    }
     await buildPrepHierCascade();
+    buildPrepVisualTree();
   } else {
     hide('prep-hier-wrap');
   }
@@ -2398,65 +2462,219 @@ async function buildPrepHierCascade(){
   wrap.innerHTML='';
   S.hierLevels.forEach((lvl,idx)=>{
     const row=document.createElement('div');
-    row.style.cssText='display:flex;gap:8px;align-items:center';
+    row.style.cssText='display:flex;align-items:center;gap:8px;';
     const badge=document.createElement('span');
-    badge.style.cssText='font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--a4);min-width:85px';
+    badge.style.cssText='font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--a4);letter-spacing:.5px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.25);border-radius:4px;padding:2px 7px;white-space:nowrap;min-width:80px;text-align:center;flex-shrink:0;';
     badge.textContent=lvl;
     const sel=document.createElement('select');
-    sel.className='form-control';
+    sel.className='cascade-select';
     sel.id=`prep-hier-${idx}`;
     if(idx>0) sel.disabled=true;
+    sel.addEventListener('change',()=>onPrepCascadeChange(idx));
     row.appendChild(badge);
     row.appendChild(sel);
     wrap.appendChild(row);
   });
+  // populate first level
+  await fillPrepLevel(0, {});
+  updatePrepBreadcrumb({});
+}
 
-  const updatePrepHierNote=()=>{
+async function fillPrepLevel(idx, currentPath){
+  const sel=document.getElementById(`prep-hier-${idx}`);
+  if(!sel) return;
+  const options=idx>0
+    ? await fetchChildValues(currentPath, idx)
+    : (S.hierLevelValues[S.hierLevels[0]] || []);
+  sel.innerHTML=`<option value="">— All —</option>`+options.map(v=>`<option value="${v}">${escapeHtml(v)}</option>`).join('');
+  sel.disabled=false;
+}
+
+async function onPrepCascadeChange(changedIdx){
+  const path={};
+  for(let i=0;i<=changedIdx;i++){
+    const sel=document.getElementById(`prep-hier-${i}`);
+    if(sel && sel.value) path[S.hierLevels[i]]=sel.value;
+  }
+  // reset & repopulate downstream
+  for(let i=changedIdx+1;i<S.hierLevels.length;i++){
+    const sel=document.getElementById(`prep-hier-${i}`);
+    if(!sel) continue;
+    sel.disabled=!path[S.hierLevels[changedIdx]];
+    sel.innerHTML='<option value="">— All —</option>';
+    sel.value='';
+    if(!sel.disabled) await fillPrepLevel(i, path);
+  }
+  S.prepNodePath=path;
+  updatePrepBreadcrumb(path);
+  highlightPrepVisualNode(path);
+}
+
+function updatePrepBreadcrumb(path){
+  const el=document.getElementById('prep-breadcrumb-path');
+  if(!el) return;
+  const entries=Object.entries(path||{});
+  if(!entries.length){
+    el.innerHTML='<span style="color:var(--tx3);font-size:12px">No node selected</span>';
+    hide('prep-node-meta-row');
+    const pre=document.getElementById('prep-node-summary-pre');
+    if(pre) pre.innerHTML='<span style="color:var(--tx3)">Select a node from the tree or dropdowns to preview it.</span>';
     const note=document.getElementById('prep-hier-note');
-    if(!note) return;
-    const parts=[];
-    for(let k=0;k<S.hierLevels.length;k++){
-      const s=document.getElementById(`prep-hier-${k}`);
-      if(!s || !s.value) break;
-      parts.push(`${S.hierLevels[k]}=${s.value}`);
-    }
-    if(!parts.length){
-      note.textContent='Choose one or more hierarchy levels. Leave lower levels as All to prepare an aggregated forecast.';
-      return;
-    }
-    const isLeaf=parts.length===S.hierLevels.length;
+    if(note) note.textContent='Choose one or more hierarchy levels. Leave lower levels as All to prepare an aggregated forecast.';
+    return;
+  }
+  el.innerHTML=entries.map(([k,v])=>`<span class="crumb">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join('<span class="crumb-sep">›</span>');
+
+  const depth=entries.length;
+  const total=S.hierLevels.length;
+  const isLeaf=depth===total;
+
+  // meta row
+  const metaEl=document.getElementById('prep-node-meta-row');
+  if(metaEl){
+    metaEl.innerHTML=`
+      <span class="chip chip-violet">Depth ${depth}/${total}</span>
+      <span class="chip ${isLeaf?'chip-green':'chip-amber'}">${isLeaf?'Leaf Node':'Aggregate Node'}</span>
+      <span class="chip chip-blue">${depth} level${depth>1?'s':''} selected</span>`;
+    show('prep-node-meta-row','flex');
+  }
+
+  // node summary panel
+  const preEl=document.getElementById('prep-node-summary-pre');
+  if(preEl){
+    const pathStr=entries.map(([k,v])=>`<strong style="color:var(--a1)">${escapeHtml(k)}</strong>=<strong style="color:var(--tx)">${escapeHtml(v)}</strong>`).join(' › ');
+    preEl.innerHTML=`<div style="margin-bottom:10px;font-size:13px;color:var(--tx2);line-height:1.8">${pathStr}</div>
+      <div style="font-size:12px;color:var(--tx3)">${isLeaf?'Leaf node — raw series will be prepared directly':'Aggregate node — child series will be aggregated before preparation'}</div>`;
+  }
+
+  // aggregation note
+  const note=document.getElementById('prep-hier-note');
+  if(note){
+    const parts=entries.map(([k,v])=>`${k}=${v}`);
     note.textContent=isLeaf
       ? `Selected leaf node: ${parts.join(' > ')}`
-      : `Selected aggregate node: ${parts.join(' > ')} (lower levels remain All and will be aggregated)`;
-  };
+      : `Selected aggregate node: ${parts.join(' > ')} — lower levels will be aggregated`;
+  }
+}
 
-  const fillLevel=async (idx, currentPath)=>{
+// ─── VISUAL TREE for Forecast Prep ──────────────────────────
+function buildPrepVisualTree(){
+  const root=document.getElementById('prep-vis-tree-root');
+  if(!root || !S.hierTree) return;
+  root.innerHTML='';
+  const totalNode=createPrepVTreeNode('Total (all series)', null, {}, -1, S.hierTree, false);
+  root.appendChild(totalNode);
+}
+
+function createPrepVTreeNode(label, levelKey, path, levelIdx, subtree, isLeaf){
+  const wrap=document.createElement('div');
+  const hasChildren=subtree&&typeof subtree==='object'&&!Array.isArray(subtree)&&Object.keys(subtree).length>0;
+
+  const nodeRow=document.createElement('div');
+  nodeRow.className='vtree-node'+(isLeaf?' leaf':'');
+
+  if(levelIdx>=0){
+    for(let i=0;i<=levelIdx;i++){
+      const ind=document.createElement('div');
+      ind.className='vtree-indent';
+      if(i<levelIdx){const line=document.createElement('div');line.className='vtree-indent-line';ind.appendChild(line);}
+      else{const h=document.createElement('div');h.className='vtree-indent-horz';ind.appendChild(h);}
+      nodeRow.appendChild(ind);
+    }
+  }
+
+  const toggleBtn=document.createElement('div');
+  toggleBtn.className='vtree-toggle-btn';
+  toggleBtn.textContent=hasChildren?'▶':'·';
+  if(!hasChildren) toggleBtn.style.opacity='0.3';
+
+  const labelEl=document.createElement('span');
+  labelEl.className='vtree-label';
+  labelEl.textContent=label;
+  if(hasChildren&&subtree){
+    const cnt=Object.keys(subtree).length;
+    const countEl=document.createElement('span');
+    countEl.className='vtree-count';
+    countEl.textContent=`(${cnt})`;
+    labelEl.appendChild(countEl);
+  }
+
+  nodeRow.appendChild(toggleBtn);
+  nodeRow.appendChild(labelEl);
+  wrap.appendChild(nodeRow);
+
+  const children=document.createElement('div');
+  children.className='vtree-children';
+  wrap.appendChild(children);
+
+  if(hasChildren){
+    toggleBtn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const open=children.classList.toggle('open');
+      toggleBtn.textContent=open?'▼':'▶';
+    });
+  }
+
+  // click label → select node + sync cascade dropdowns
+  nodeRow.addEventListener('click', async ()=>{
+    document.querySelectorAll('#prep-vis-tree-root .vtree-node.selected').forEach(n=>n.classList.remove('selected'));
+    nodeRow.classList.add('selected');
+    const newPath=levelIdx>=0?{...path}:{};
+    S.prepNodePath=newPath;
+    updatePrepBreadcrumb(newPath);
+    await syncPrepCascadeDropdowns(newPath);
+  });
+
+  if(hasChildren){
+    let built=false;
+    toggleBtn.addEventListener('click',()=>{
+      if(built) return; built=true;
+      Object.keys(subtree).forEach(val=>{
+        const childPath={...path};
+        const childLvl=levelIdx+1;
+        if(childLvl<S.hierLevels.length) childPath[S.hierLevels[childLvl]]=val;
+        const childSubtree=subtree[val];
+        const childIsLeaf=!childSubtree||typeof childSubtree!=='object'||Array.isArray(childSubtree)||Object.keys(childSubtree).length===0;
+        const child=createPrepVTreeNode(val, S.hierLevels[childLvl]||null, childPath, childLvl, childSubtree, childIsLeaf);
+        children.appendChild(child);
+      });
+    },{once:true});
+  }
+
+  return wrap;
+}
+
+async function syncPrepCascadeDropdowns(path){
+  for(let idx=0; idx<S.hierLevels.length; idx++){
+    const lvl=S.hierLevels[idx];
     const sel=document.getElementById(`prep-hier-${idx}`);
-    if(!sel) return;
-    const options=idx>0
-      ? await fetchChildValues(currentPath, idx)
-      : (S.hierLevelValues[S.hierLevels[0]] || []);
-    sel.innerHTML=`<option value="">All</option>`+options.map(v=>`<option value="${v}">${v}</option>`).join('');
-    sel.disabled=false;
-    sel.onchange=async ()=>{
-      const nextPath={...currentPath};
-      if(sel.value) nextPath[S.hierLevels[idx]]=sel.value;
-      for(let j=idx+1;j<S.hierLevels.length;j++){
-        const nxt=document.getElementById(`prep-hier-${j}`);
-        if(nxt){
-          nxt.innerHTML='<option value="">All</option>';
-          nxt.disabled=true;
-          nxt.value='';
-        }
-      }
-      if(sel.value){
-        if(idx+1<S.hierLevels.length) await fillLevel(idx+1,nextPath);
-      }
-      updatePrepHierNote();
-    };
-  };
-  await fillLevel(0,{});
-  updatePrepHierNote();
+    if(!sel) continue;
+    const v=path[lvl];
+    const prevPath={};
+    for(let k=0;k<idx;k++) if(path[S.hierLevels[k]]) prevPath[S.hierLevels[k]]=path[S.hierLevels[k]];
+    sel.disabled=idx>0&&!path[S.hierLevels[idx-1]];
+    if(!sel.disabled) await fillPrepLevel(idx, prevPath);
+    if(v) sel.value=v; else sel.value='';
+  }
+}
+
+function highlightPrepVisualNode(path){
+  // breadcrumb already updated; visual highlight is handled by click events on tree nodes
+  updatePrepBreadcrumb(path);
+}
+
+function togglePrepVisTree(){
+  const wrap=document.getElementById('prep-vis-tree-wrap');
+  const icon=document.getElementById('prep-vis-tree-icon');
+  const btn=document.getElementById('prep-vis-tree-toggle-btn');
+  if(!wrap) return;
+  if(wrap.style.display==='none'){
+    wrap.style.display='block'; icon.textContent='▼';
+    btn.querySelector('span:last-child').textContent='click to collapse';
+  } else {
+    wrap.style.display='none'; icon.textContent='▶';
+    btn.querySelector('span:last-child').textContent='click to expand';
+  }
 }
 
 async function runForecastPrep(){
@@ -2477,9 +2695,15 @@ async function runForecastPrep(){
   }
   const nodePath={};
   if(S.prepMode==='hierarchy'){
-    for(let i=0;i<(S.hierLevels||[]).length;i++){
-      const v=document.getElementById(`prep-hier-${i}`)?.value;
-      if(v) nodePath[S.hierLevels[i]]=v;
+    // prefer the tracked path object (set by tree click or cascade change)
+    const tracked=S.prepNodePath||{};
+    if(Object.keys(tracked).length){
+      Object.assign(nodePath, tracked);
+    } else {
+      for(let i=0;i<(S.hierLevels||[]).length;i++){
+        const v=document.getElementById(`prep-hier-${i}`)?.value;
+        if(v) nodePath[S.hierLevels[i]]=v;
+      }
     }
     if(!Object.keys(nodePath).length){toast('Select a hierarchy path','err');return;}
   }
