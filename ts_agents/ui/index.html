@@ -361,8 +361,10 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 #recon-family-card {
   overflow-y: hidden;
 }
-canvas {
+#recon-family-card canvas {
+  width: 100% !important;
   height: 300px !important;
+  display: block;
 }
 
 /* Override Forecasts UI */
@@ -1381,7 +1383,7 @@ canvas {
         </div>
         <!-- Series legend (interactive) -->
         <div id="stab-series-legend" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px"></div>
-        <canvas id="stab-main-chart" height="240"></canvas>
+        <canvas id="stab-main-chart"></canvas>
       </div>
 
       <!-- Envelope chart (mean ± std) -->
@@ -2904,26 +2906,44 @@ function renderTimelineChart(result){
           display:true,
           labels:{
             color:'#8faec8',
-            boxWidth:12,
-            font:{size:11},
+            boxWidth:10,
+            boxHeight:10,
+            padding:12,
+            usePointStyle:true,
+            pointStyle:'line',
+            font:{family:'IBM Plex Mono',size:10},
             // In forecast-only mode hide the train/val/test legend items
             filter: forecastOnly
               ? (item)=>!['Train','Validation','Test','Historical Observations'].includes(item.text)
               : undefined
           }
         },
-        tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(12,16,25,.9)',titleColor:'#e8f0fe',bodyColor:'#8faec8',borderColor:'rgba(59,130,246,.3)',borderWidth:1}
+        tooltip:{
+          mode:'index',
+          intersect:false,
+          backgroundColor:'rgba(12,16,25,.9)',
+          titleColor:'#e8f0fe',
+          bodyColor:'#8faec8',
+          borderColor:'rgba(59,130,246,.3)',
+          borderWidth:1,
+          titleFont:{family:'IBM Plex Mono',size:11},
+          bodyFont:{family:'IBM Plex Mono',size:10}
+        }
       },
       scales:{
         x:{
-          ticks:{color:'#3d5a7a',maxTicksLimit: forecastOnly ? 8 : 10,font:{family:'IBM Plex Mono',size:10}},
-          grid:{color:'rgba(31,45,66,.5)'}
+          alignToPixels:true,
+          ticks:{color:'#3d5a7a',maxTicksLimit: forecastOnly ? 8 : 10,font:{family:'IBM Plex Mono',size:10},maxRotation:0,autoSkipPadding:14},
+          grid:{color:'rgba(31,45,66,.45)'},
+          title:{display:true,text:'Date',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}}
         },
         y:{
+          alignToPixels:true,
           min: forecastOnly ? ymin : undefined,
           max: forecastOnly ? ymax : undefined,
-          ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}},
-          grid:{color:'rgba(31,45,66,.5)'}
+          ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10},padding:6},
+          grid:{color:'rgba(31,45,66,.45)'},
+          title:{display:true,text:'Value',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}}
         }
       }
     }
@@ -4814,6 +4834,8 @@ function renderMainSuperimposedChart(r) {
           backgroundColor: 'rgba(12,16,25,0.95)',
           titleColor: '#e8f0fe', bodyColor: '#8faec8',
           borderColor: 'rgba(59,130,246,0.3)', borderWidth: 1,
+          titleFont: { family: 'IBM Plex Mono', size: 11 },
+          bodyFont: { family: 'IBM Plex Mono', size: 10 },
           callbacks: {
             label: ctx2 => {
               const v = ctx2.raw;
@@ -4825,12 +4847,16 @@ function renderMainSuperimposedChart(r) {
       },
       scales: {
         x: {
-          ticks: { color: '#3d5a7a', maxTicksLimit: 14, font: { family: 'IBM Plex Mono', size: 10 } },
-          grid: { color: 'rgba(31,45,66,0.5)' },
+          alignToPixels: true,
+          ticks: { color: '#3d5a7a', maxTicksLimit: 14, font: { family: 'IBM Plex Mono', size: 10 }, maxRotation: 0, autoSkipPadding: 14 },
+          grid: { color: 'rgba(31,45,66,0.45)' },
+          title: { display: true, text: 'Date', color: '#8faec8', font: { family: 'IBM Plex Mono', size: 10 } },
         },
         y: {
-          ticks: { color: '#3d5a7a', font: { family: 'IBM Plex Mono', size: 10 } },
-          grid: { color: 'rgba(31,45,66,0.5)' },
+          alignToPixels: true,
+          ticks: { color: '#3d5a7a', font: { family: 'IBM Plex Mono', size: 10 }, padding: 6 },
+          grid: { color: 'rgba(31,45,66,0.45)' },
+          title: { display: true, text: 'Value', color: '#8faec8', font: { family: 'IBM Plex Mono', size: 10 } },
         },
       },
     },
@@ -4896,11 +4922,21 @@ function _compactChartOpts() {
     animation: { duration: 300 },
     plugins: {
       legend: { display: false },
-      tooltip: { mode: 'index', intersect: false, backgroundColor: 'rgba(12,16,25,.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8', borderColor:'rgba(59,130,246,.3)', borderWidth:1 },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        backgroundColor: 'rgba(12,16,25,.9)',
+        titleColor:'#e8f0fe',
+        bodyColor:'#8faec8',
+        borderColor:'rgba(59,130,246,.3)',
+        borderWidth:1,
+        titleFont:{family:'IBM Plex Mono',size:11},
+        bodyFont:{family:'IBM Plex Mono',size:10},
+      },
     },
     scales: {
-      x: { ticks: { color:'#3d5a7a', maxTicksLimit:10, font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,.5)'} },
-      y: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,.5)'} },
+      x: { alignToPixels:true, ticks: { color:'#3d5a7a', maxTicksLimit:10, font:{family:'IBM Plex Mono',size:10}, maxRotation:0, autoSkipPadding:14 }, grid:{color:'rgba(31,45,66,.45)'}, title:{display:true,text:'Date',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}} },
+      y: { alignToPixels:true, ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10}, padding:6 }, grid:{color:'rgba(31,45,66,.45)'}, title:{display:true,text:'Value',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}} },
     },
   };
 }
@@ -4938,11 +4974,19 @@ function renderSeasonalCharts(r) {
         animation: { duration: 350 },
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: 'rgba(12,16,25,.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8', borderColor:'rgba(245,158,11,.3)', borderWidth:1 },
+          tooltip: {
+            backgroundColor: 'rgba(12,16,25,.9)',
+            titleColor:'#e8f0fe',
+            bodyColor:'#8faec8',
+            borderColor:'rgba(245,158,11,.3)',
+            borderWidth:1,
+            titleFont:{family:'IBM Plex Mono',size:11},
+            bodyFont:{family:'IBM Plex Mono',size:10},
+          },
         },
         scales: {
-          x: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{display:false} },
-          y: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10} }, grid:{color:'rgba(31,45,66,.5)'} },
+          x: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10}, maxRotation:0 }, grid:{display:false}, title:{display:true,text:'Season',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}} },
+          y: { ticks: { color:'#3d5a7a', font:{family:'IBM Plex Mono',size:10}, padding:6 }, grid:{color:'rgba(31,45,66,.45)'}, title:{display:true,text:'Avg Value',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}} },
         },
       },
     });
@@ -4975,12 +5019,14 @@ function renderSeasonalCharts(r) {
           tooltip: {
             backgroundColor: 'rgba(12,16,25,.9)', titleColor:'#e8f0fe', bodyColor:'#8faec8',
             borderColor:'rgba(139,92,246,.3)', borderWidth:1,
+            titleFont:{family:'IBM Plex Mono',size:11},
+            bodyFont:{family:'IBM Plex Mono',size:10},
             callbacks: { label: ctx2 => ` CV=${(ctx2.raw||0).toFixed(3)} (${cv2label(ctx2.raw)})` }
           },
         },
         scales: {
-          x: { ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}}, grid:{display:false} },
-          y: { ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}}, grid:{color:'rgba(31,45,66,.5)'}, suggestedMax: 1 },
+          x: { ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}, maxRotation:0}, grid:{display:false}, title:{display:true,text:'Season',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}} },
+          y: { ticks:{color:'#3d5a7a',font:{family:'IBM Plex Mono',size:10}, padding:6}, grid:{color:'rgba(31,45,66,.45)'}, suggestedMax: 1, title:{display:true,text:'CV',color:'#8faec8',font:{family:'IBM Plex Mono',size:10}} },
         },
       },
     });
