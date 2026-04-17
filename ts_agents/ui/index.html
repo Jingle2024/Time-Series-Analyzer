@@ -217,6 +217,24 @@ tr:hover td{background:rgba(59,130,246,.04);color:var(--tx)}
   letter-spacing:.5px;text-transform:uppercase;
   display:flex;align-items:center;gap:8px;
 }
+.hier-nav-tabs{
+  display:flex;gap:8px;padding:10px 14px;
+  border-bottom:1px solid var(--border);background:rgba(12,16,25,.55);
+}
+.hier-nav-tab{
+  flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg2);color:var(--tx3);font-size:11px;font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;cursor:pointer;transition:all .15s;
+  font-family:'Outfit',sans-serif;
+}
+.hier-nav-tab:hover{border-color:var(--border2);color:var(--tx2)}
+.hier-nav-tab.active{
+  color:var(--tx);border-color:rgba(59,130,246,.4);
+  background:rgba(59,130,246,.12);box-shadow:inset 0 0 0 1px rgba(59,130,246,.12);
+}
+.hier-nav-view{display:none}
+.hier-nav-view.active{display:block}
+.hier-nav-section{padding:10px 14px;border-top:1px solid var(--border)}
 /* Cascading dropdowns */
 .cascade-selects{padding:16px;display:flex;flex-direction:column;gap:0}
 .cascade-level{
@@ -472,7 +490,6 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 .tab-sidebar .hier-nav-header{padding:11px 14px;font-size:11px;}
 .tab-sidebar .node-breadcrumb{padding:8px 14px;}
 .tab-sidebar .node-meta-row{padding:8px 14px;}
-.tab-sidebar .vis-tree-toggle{padding:7px 14px;}
 .tab-sidebar .cascade-select{font-size:11px;padding:5px 8px;}
 /* single-series selector in sidebar */
 .sidebar-series-select{width:100%;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--tx);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;}
@@ -766,17 +783,20 @@ img,svg{max-width:100%;height:auto}
               🌲 Hierarchy Navigator
               <span class="chip chip-violet" style="margin-left:auto;font-size:9px" id="tree-total-leaves">0 leaves</span>
             </div>
-            <div class="vis-tree-toggle" onclick="toggleVisTree()" id="vis-tree-toggle-btn">
-              <span id="vis-tree-icon">▶</span>
-              <span>Visual Tree</span>
-              <span style="margin-left:auto;font-size:10px">expand</span>
+            <div class="hier-nav-tabs">
+              <button type="button" class="hier-nav-tab active" id="analyze-hier-tab-filters" onclick="setHierarchyBrowseTab('analyze','filters')">Filters</button>
+              <button type="button" class="hier-nav-tab" id="analyze-hier-tab-tree" onclick="setHierarchyBrowseTab('analyze','tree')">Tree View</button>
             </div>
-            <div class="vis-tree-wrap" id="vis-tree-wrap" style="display:none">
-              <div id="vis-tree-root"></div>
+            <div class="hier-nav-view active" id="analyze-hier-view-filters">
+              <div class="hier-nav-section">
+                <div class="sidebar-section-label">Cascading Selection</div>
+                <div id="tree-cascade-selects" style="display:flex;flex-direction:column;gap:6px"></div>
+              </div>
             </div>
-            <div style="padding:10px 14px;border-top:1px solid var(--border)">
-              <div class="sidebar-section-label">Cascading Selection</div>
-              <div id="tree-cascade-selects" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div class="hier-nav-view" id="analyze-hier-view-tree">
+              <div class="vis-tree-wrap" id="vis-tree-wrap" style="border-top:none">
+                <div id="vis-tree-root"></div>
+              </div>
             </div>
             <div class="node-breadcrumb" id="node-breadcrumb">
               <div class="breadcrumb-label">Selected Node</div>
@@ -1021,17 +1041,20 @@ img,svg{max-width:100%;height:auto}
               🌲 Hierarchy Navigator
               <span class="chip chip-violet" style="margin-left:auto;font-size:9px" id="prep-tree-total-leaves">0 leaves</span>
             </div>
-            <div class="vis-tree-toggle" onclick="togglePrepVisTree()" id="prep-vis-tree-toggle-btn">
-              <span id="prep-vis-tree-icon">▶</span>
-              <span>Visual Tree</span>
-              <span style="margin-left:auto;font-size:10px">expand</span>
+            <div class="hier-nav-tabs">
+              <button type="button" class="hier-nav-tab active" id="prep-hier-tab-filters" onclick="setHierarchyBrowseTab('prep','filters')">Filters</button>
+              <button type="button" class="hier-nav-tab" id="prep-hier-tab-tree" onclick="setHierarchyBrowseTab('prep','tree')">Tree View</button>
             </div>
-            <div class="vis-tree-wrap" id="prep-vis-tree-wrap" style="display:none">
-              <div id="prep-vis-tree-root"></div>
+            <div class="hier-nav-view active" id="prep-hier-view-filters">
+              <div class="hier-nav-section">
+                <div class="sidebar-section-label">Cascading Selection</div>
+                <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:6px"></div>
+              </div>
             </div>
-            <div style="padding:10px 14px;border-top:1px solid var(--border)">
-              <div class="sidebar-section-label">Cascading Selection</div>
-              <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div class="hier-nav-view" id="prep-hier-view-tree">
+              <div class="vis-tree-wrap" id="prep-vis-tree-wrap" style="border-top:none">
+                <div id="prep-vis-tree-root"></div>
+              </div>
             </div>
             <div class="node-breadcrumb" id="prep-node-breadcrumb">
               <div class="breadcrumb-label">Selected Node</div>
@@ -2076,6 +2099,7 @@ function setAnalyzeMode(mode) {
     show('single-controls'); hide('hier-node-controls');
   } else {
     hide('single-controls'); show('hier-node-controls');
+    setHierarchyBrowseTab('analyze','filters');
     loadHierarchyTree();
   }
 }
@@ -2417,17 +2441,16 @@ function highlightVisualNode(path) {
   updateBreadcrumb(path);
 }
 
+function setHierarchyBrowseTab(scope, tab) {
+  ['filters','tree'].forEach(name => {
+    document.getElementById(`${scope}-hier-tab-${name}`)?.classList.toggle('active', name===tab);
+    document.getElementById(`${scope}-hier-view-${name}`)?.classList.toggle('active', name===tab);
+  });
+}
+
 function toggleVisTree() {
-  const wrap=document.getElementById('vis-tree-wrap');
-  const icon=document.getElementById('vis-tree-icon');
-  const btn=document.getElementById('vis-tree-toggle-btn');
-  if(wrap.style.display==='none'){
-    wrap.style.display='block'; icon.textContent='▼';
-    btn.querySelector('span:last-child').textContent='click to collapse';
-  } else {
-    wrap.style.display='none'; icon.textContent='▶';
-    btn.querySelector('span:last-child').textContent='click to expand';
-  }
+  const nextTab = document.getElementById('analyze-hier-view-tree')?.classList.contains('active') ? 'filters' : 'tree';
+  setHierarchyBrowseTab('analyze', nextTab);
 }
 
 // ─── RUN ANALYSIS ─────────────────────────────────────────
@@ -2629,6 +2652,7 @@ async function setPrepMode(mode){
   if(hb) { hb.classList.toggle('active', S.prepMode==='hierarchy'); }
   if(S.prepMode === 'hierarchy' && S.isHierarchy){
     show('prep-hier-wrap');
+    setHierarchyBrowseTab('prep','filters');
     // sync total-leaves chip from Analyzer tree if already loaded
     const leavesChip=document.getElementById('prep-tree-total-leaves');
     if(leavesChip){
@@ -2877,17 +2901,8 @@ function highlightPrepVisualNode(path){
 }
 
 function togglePrepVisTree(){
-  const wrap=document.getElementById('prep-vis-tree-wrap');
-  const icon=document.getElementById('prep-vis-tree-icon');
-  const btn=document.getElementById('prep-vis-tree-toggle-btn');
-  if(!wrap) return;
-  if(wrap.style.display==='none'){
-    wrap.style.display='block'; icon.textContent='▼';
-    btn.querySelector('span:last-child').textContent='click to collapse';
-  } else {
-    wrap.style.display='none'; icon.textContent='▶';
-    btn.querySelector('span:last-child').textContent='click to expand';
-  }
+  const nextTab = document.getElementById('prep-hier-view-tree')?.classList.contains('active') ? 'filters' : 'tree';
+  setHierarchyBrowseTab('prep', nextTab);
 }
 
 async function runForecastPrep(){
