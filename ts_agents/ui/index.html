@@ -1116,28 +1116,44 @@ img,svg{max-width:100%;height:auto}
               <div id="prep-timeline-meta" style="margin-top:8px;font-size:12px;color:var(--tx2)"></div>
             </div>
 
-            <!-- Model comparison -->
-            <div class="grid-2" style="margin-bottom:14px">
-              <div class="card">
-                <div class="card-title">Model Parameters</div>
-                <div id="prep-model-params" class="grid-3"></div>
+            <div class="card" id="prep-model-comparison-card" style="margin-bottom:14px">
+              <div class="card-title">Model Comparison (MAPE)</div>
+              <div id="prep-model-best" style="margin-bottom:6px;font-size:12px;color:var(--tx2)"></div>
+              <div id="prep-model-legend" style="margin-bottom:6px;font-size:12px;color:var(--tx3)"></div>
+              <div class="tbl-wrap" id="prep-model-compare" style="max-height:260px;overflow:auto"></div>
+            </div>
+
+            <div class="settings-drawer" id="prep-model-params-drawer" style="margin-bottom:14px">
+              <div class="settings-drawer-header" onclick="toggleDrawer('prep-model-params-drawer')">
+                <span class="settings-drawer-title">📊 Model Parameters</span>
+                <span class="settings-drawer-badge">DETAILS</span>
+                <span class="settings-drawer-chevron">▲</span>
               </div>
-              <div class="card">
-                <div class="card-title">Model Comparison (MAPE)</div>
-                <div id="prep-model-best" style="margin-bottom:6px;font-size:12px;color:var(--tx2)"></div>
-                <div id="prep-model-legend" style="margin-bottom:6px;font-size:12px;color:var(--tx3)"></div>
-                <div class="tbl-wrap" id="prep-model-compare" style="max-height:200px;overflow:auto"></div>
+              <div class="settings-drawer-body">
+                <div id="prep-model-params" class="grid-3"></div>
               </div>
             </div>
 
-            <div class="result-section-head">Data Previews</div>
-            <div class="card" style="margin-bottom:14px">
-              <div class="card-title">Feature Matrix Preview</div>
-              <div class="tbl-wrap" id="prep-feature-preview" style="max-height:240px;overflow:auto"></div>
+            <div class="settings-drawer" id="prep-feature-preview-drawer" style="margin-bottom:14px">
+              <div class="settings-drawer-header" onclick="toggleDrawer('prep-feature-preview-drawer')">
+                <span class="settings-drawer-title">🧮 Feature Matrix Preview</span>
+                <span class="settings-drawer-badge">PREVIEW</span>
+                <span class="settings-drawer-chevron">▲</span>
+              </div>
+              <div class="settings-drawer-body">
+                <div class="tbl-wrap" id="prep-feature-preview" style="max-height:240px;overflow:auto"></div>
+              </div>
             </div>
-            <div class="card" style="margin-bottom:14px">
-              <div class="card-title">Future Frame Preview</div>
-              <div class="tbl-wrap" id="prep-future-preview" style="max-height:200px;overflow:auto"></div>
+
+            <div class="settings-drawer" id="prep-future-preview-drawer" style="margin-bottom:14px">
+              <div class="settings-drawer-header" onclick="toggleDrawer('prep-future-preview-drawer')">
+                <span class="settings-drawer-title">🗓 Future Frame Preview</span>
+                <span class="settings-drawer-badge">PREVIEW</span>
+                <span class="settings-drawer-chevron">▲</span>
+              </div>
+              <div class="settings-drawer-body">
+                <div class="tbl-wrap" id="prep-future-preview" style="max-height:200px;overflow:auto"></div>
+              </div>
             </div>
 
             <!-- Export bar -->
@@ -1351,9 +1367,15 @@ img,svg{max-width:100%;height:auto}
     <div class="tab-layout">
 
       <!-- ═══ LEFT SIDEBAR ═══ -->
-      <div class="tab-sidebar">
-        <div class="sidebar-header">⚙ Forecast Controls</div>
+      <div class="tab-sidebar" id="recon-sidebar" style="overflow-y:auto;overflow-x:hidden">
 
+        <div class="settings-drawer" id="recon-controls-drawer" style="margin-bottom:14px">
+          <div class="settings-drawer-header" onclick="toggleDrawer('recon-controls-drawer')">
+            <span class="settings-drawer-title">Forecast Controls</span>
+            <span class="settings-drawer-badge">INPUT</span>
+            <span class="settings-drawer-chevron">▲</span>
+          </div>
+          <div class="settings-drawer-body">
         <!-- Dependent series -->
         <div class="sidebar-section">
           <div class="sidebar-section-label">Dependent Series</div>
@@ -1374,35 +1396,73 @@ img,svg{max-width:100%;height:auto}
           </div>
         </div>
 
+          </div>
+        </div>
+
+        <div class="settings-drawer" id="recon-navigator-drawer" style="margin-bottom:14px">
+          <div class="settings-drawer-header" onclick="toggleDrawer('recon-navigator-drawer')">
+            <span class="settings-drawer-title">Hierarchy Navigator</span>
+            <span class="settings-drawer-badge">BROWSE</span>
+            <span class="settings-drawer-chevron">▲</span>
+          </div>
+          <div class="settings-drawer-body" style="padding:0">
         <!-- Node context strip (shown after results) -->
-        <div class="node-context-strip" id="node-context-strip-recon" style="display:none">
+        <div class="node-context-strip" id="node-context-strip-recon" style="display:none;margin:18px 18px 0">
           <span class="node-context-empty">No node selected</span>
         </div>
 
         <!-- Node browser (shown after results) -->
         <div id="recon-node-browser" style="display:none">
-          <div class="hier-nav-panel">
-            <div class="hier-nav-header">🔍 Browse Nodes</div>
-            <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
-              <div class="sidebar-section-label">Level</div>
-              <select class="sidebar-series-select" id="recon-level-select" onchange="onReconPreviewLevelChange()" style="margin-bottom:8px"></select>
-              <div class="sidebar-section-label" style="margin-top:6px">Node</div>
-              <select class="sidebar-series-select" id="recon-node-select" onchange="renderReconSelectedNode()"></select>
+          <div class="hier-nav-panel" style="border:none;border-radius:0;box-shadow:none">
+            <div class="hier-nav-header">
+              Browse Nodes
+              <span class="chip chip-violet" style="margin-left:auto;font-size:9px" id="recon-tree-total-leaves">0 leaves</span>
             </div>
-            <!-- Tree browser -->
-            <div id="recon-tree-card" style="display:none">
-              <div class="vis-tree-toggle" onclick="toggleReconTree()" id="recon-tree-toggle-btn" style="border-top:none">
-                <span id="recon-tree-icon">▶</span>
-                <span>Visual Tree</span>
-                <span style="margin-left:auto;font-size:10px" id="recon-tree-hint">expand</span>
-              </div>
-              <div class="vis-tree-wrap" id="recon-tree-wrap" style="display:none;max-height:240px">
-                <div id="recon-tree-root"></div>
+            <div class="hier-nav-tabs">
+              <button type="button" class="hier-nav-tab active" id="recon-hier-tab-filters" onclick="setReconBrowseTab('filters')">Filters</button>
+              <button type="button" class="hier-nav-tab" id="recon-hier-tab-tree" onclick="setReconBrowseTab('tree')">Tree View</button>
+            </div>
+            <div class="hier-nav-view active" id="recon-hier-view-filters">
+              <div class="hier-nav-section" style="border-top:none">
+                <div class="sidebar-section-label">Level</div>
+                <select class="sidebar-series-select" id="recon-level-select" onchange="onReconPreviewLevelChange()" style="margin-bottom:8px"></select>
+                <div class="sidebar-section-label" style="margin-top:6px">Node</div>
+                <select class="sidebar-series-select" id="recon-node-select" onchange="renderReconSelectedNode()"></select>
               </div>
             </div>
+            <div class="hier-nav-view" id="recon-hier-view-tree">
+              <div id="recon-tree-card" style="display:none">
+                <div class="vis-tree-wrap" id="recon-tree-wrap" style="max-height:240px;border-top:none">
+                  <div id="recon-tree-root"></div>
+                </div>
+              </div>
+              <div id="recon-tree-empty" style="display:none;padding:12px 14px;color:var(--tx3);font-size:12px;border-top:1px solid var(--border)">
+                Tree view is unavailable for truncated preview payloads. Use Filters to browse the available nodes.
+              </div>
+              <div id="recon-tree-loading" style="display:none;padding:12px 14px;color:var(--tx3);font-size:12px;border-top:1px solid var(--border)">
+                Run reconciled forecasting to load the hierarchy tree preview.
+              </div>
+            </div>
+            <div class="node-breadcrumb" id="recon-node-breadcrumb">
+              <div class="breadcrumb-label">Selected Node</div>
+              <div class="breadcrumb-path" id="recon-breadcrumb-path">
+                <span style="color:var(--tx3);font-size:11px">No node selected</span>
+              </div>
+            </div>
+            <div class="node-meta-row" id="recon-node-meta-row" style="display:none"></div>
           </div>
         </div>
 
+          </div>
+        </div>
+
+        <div class="settings-drawer" id="recon-config-drawer" style="margin-bottom:14px">
+          <div class="settings-drawer-header" onclick="toggleDrawer('recon-config-drawer')">
+            <span class="settings-drawer-title">Configuration Parameters</span>
+            <span class="settings-drawer-badge">SETUP</span>
+            <span class="settings-drawer-chevron">▲</span>
+          </div>
+          <div class="settings-drawer-body">
         <!-- Horizon & interval -->
         <div class="sidebar-section">
           <div class="sidebar-section-label">Horizon (periods)</div>
@@ -1453,6 +1513,9 @@ img,svg{max-width:100%;height:auto}
           <div style="margin-top:10px;font-size:12px;color:var(--tx2)" id="recon-hier-order-note"></div>
         </div>
 
+          </div>
+        </div>
+
         <!-- Run button -->
         <div class="sidebar-section sidebar-run-section">
           <button class="sidebar-run-btn" onclick="runReconciledForecast()">▶ Run Reconciled Forecast</button>
@@ -1463,7 +1526,7 @@ img,svg{max-width:100%;height:auto}
       </div><!-- /sidebar -->
 
       <!-- ═══ MAIN CONTENT ═══ -->
-      <div class="tab-main">
+      <div class="tab-main" id="recon-main">
 
         <!-- Stat bar -->
         <div class="stat-bar" id="recon-stats-row" style="display:none"></div>
@@ -1568,9 +1631,16 @@ img,svg{max-width:100%;height:auto}
               <div id="recon-family-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
             </div>
 
-            <!-- Node summary table -->
-            <div class="result-section-head">Node Summary</div>
-            <div class="tbl-wrap" id="recon-node-summary" style="max-height:240px;overflow:auto;margin-bottom:14px"></div>
+            <div class="settings-drawer" id="recon-node-summary-drawer" style="margin-bottom:14px">
+              <div class="settings-drawer-header" onclick="toggleDrawer('recon-node-summary-drawer')">
+                <span class="settings-drawer-title">Node Summary</span>
+                <span class="settings-drawer-badge">DETAILS</span>
+                <span class="settings-drawer-chevron">▲</span>
+              </div>
+              <div class="settings-drawer-body">
+                <div class="tbl-wrap" id="recon-node-summary" style="max-height:240px;overflow:auto"></div>
+              </div>
+            </div>
 
             <!-- Export bar -->
             <div class="export-bar">
@@ -1746,8 +1816,8 @@ img,svg{max-width:100%;height:auto}
 // ════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════
-const API = "https://goldfish-app-avb6e.ondigitalocean.app";
-//const API = 'http://127.0.0.1:8080';
+//const API = "https://goldfish-app-avb6e.ondigitalocean.app";
+const API = 'http://127.0.0.1:8080';
 const S = {
   token: null, filename: null, uploadMeta: null,
   valueCols: [], hierCols: [], hierOrder: [], isHierarchy: false,
@@ -2642,6 +2712,9 @@ async function initPrepTab(){
   setPrepIntervalMode();
   // open settings drawer by default (no results yet)
   openDrawer('prep-settings-drawer');
+  closeDrawer('prep-model-params-drawer');
+  closeDrawer('prep-feature-preview-drawer');
+  closeDrawer('prep-future-preview-drawer');
 }
 
 async function setPrepMode(mode){
@@ -3693,6 +3766,9 @@ function revealPrepResults() {
   if (bar) bar.style.display = 'grid';
   // collapse settings drawer once results are in
   closeDrawer('prep-settings-drawer');
+  closeDrawer('prep-model-params-drawer');
+  closeDrawer('prep-feature-preview-drawer');
+  closeDrawer('prep-future-preview-drawer');
   const badge = document.getElementById('prep-settings-badge');
   if (badge) badge.textContent = 'EDIT';
   const drawer = document.getElementById('prep-settings-drawer');
@@ -3707,6 +3783,12 @@ function revealReconResults() {
   // show the node browser in sidebar
   show('recon-node-browser');
   show('node-context-strip-recon');
+  closeDrawer('recon-controls-drawer');
+  openDrawer('recon-navigator-drawer');
+  openDrawer('recon-config-drawer');
+  closeDrawer('recon-node-summary-drawer');
+  closeDrawer('recon-settings-drawer');
+  syncReconTreeVisibility();
 }
 
 // Update node context strip (sidebar breadcrumb chip strip)
@@ -3741,7 +3823,17 @@ const FAMILY = {
   members: [],   // [{nodeId, role, label, color}]
 };
 
+function ensureReconLayout() {
+  const configDrawer = document.getElementById('recon-config-drawer');
+  const reconMain = document.getElementById('recon-main');
+  const settingsDrawer = document.getElementById('recon-settings-drawer');
+  if (configDrawer && reconMain && settingsDrawer && configDrawer.parentElement !== reconMain) {
+    reconMain.insertBefore(configDrawer, settingsDrawer);
+  }
+}
+
 function initReconTab() {
+  ensureReconLayout();
   if(!S.token || !S.isHierarchy || !(S.hierCols||[]).length){
     show('recon-no-data'); hide('recon-ready'); return;
   }
@@ -3762,6 +3854,14 @@ function initReconTab() {
   setHtml('recon-hier-order-note', order.length ? `Hierarchy order: <strong style="color:var(--a4)">${order.map(escapeHtml).join(' → ')}</strong>` : '');
   setReconIntervalMode();
   onReconStrategyChange();
+  setReconBrowseTab('filters');
+  updateReconHierarchyStats();
+  updateReconBreadcrumb(null);
+  openDrawer('recon-controls-drawer');
+  closeDrawer('recon-navigator-drawer');
+  openDrawer('recon-config-drawer');
+  closeDrawer('recon-node-summary-drawer');
+  closeDrawer('recon-settings-drawer');
 }
 
 function onReconStrategyChange() {
@@ -3903,6 +4003,7 @@ function renderReconResults(r) {
   setHtml('recon-forecast-preview', buildTable(r.forecast_preview||[]));
   setHtml('recon-report', r.report||'');
   setHtml('recon-export-info', `Ready: ${(S.reconDownloadExt||'').toUpperCase()} export`);
+  updateReconHierarchyStats();
   const treeCard=document.getElementById('recon-tree-card');
   if(treeCard) treeCard.style.display = r.preview_truncated ? 'none' : 'block';
   if(r.preview_truncated){
@@ -3938,6 +4039,45 @@ function onReconPreviewLevelChange() {
     return `<option value="${nodeId}" ${nodeId===RECON.selectedNodeId?'selected':''}>${escapeHtml(label)}</option>`;
   }).join('');
   renderReconSelectedNode();
+}
+
+function updateReconHierarchyStats() {
+  const chip=document.getElementById('recon-tree-total-leaves');
+  if(!chip) return;
+  const nodes=RECON.result?.preview_nodes||[];
+  if(!nodes.length){
+    chip.textContent='0 leaves';
+    return;
+  }
+  const parentIds=new Set(nodes.map(node=>node.parent_id).filter(Boolean));
+  const leafCount=nodes.filter(node=>!parentIds.has(node.node_id)).length;
+  chip.textContent=`${leafCount} leaf${leafCount===1?'':'es'}`;
+}
+
+function updateReconBreadcrumb(nodeId) {
+  const pathEl=document.getElementById('recon-breadcrumb-path');
+  const metaEl=document.getElementById('recon-node-meta-row');
+  if(!pathEl || !metaEl) return;
+  const meta=(RECON.result?.preview_nodes||[]).find(node=>node.node_id===nodeId)||null;
+  if(!meta){
+    pathEl.innerHTML='<span style="color:var(--tx3);font-size:12px">No node selected</span>';
+    hide('recon-node-meta-row');
+    return;
+  }
+  const displayPath=meta.display_path || meta.label || nodeId;
+  const parts=String(displayPath).split(' / ').filter(Boolean);
+  pathEl.innerHTML=(parts.length?parts:[displayPath]).map(part=>`<span class="crumb">${escapeHtml(part)}</span>`).join('<span class="crumb-sep">&rsaquo;</span>');
+
+  const levels=RECON.result?.hierarchy_order || S.hierLevels || S.hierCols || [];
+  const depth=Math.max(parts.length, meta.level_name ? levels.indexOf(meta.level_name)+1 : 1);
+  const total=levels.length || depth;
+  const parentIds=new Set((RECON.result?.preview_nodes||[]).map(node=>node.parent_id).filter(Boolean));
+  const isLeaf=!parentIds.has(meta.node_id);
+  metaEl.innerHTML=`
+    <span class="chip chip-violet">Depth ${Math.max(depth,1)}/${Math.max(total,1)}</span>
+    <span class="chip ${isLeaf?'chip-green':'chip-amber'}">${isLeaf?'Leaf Node':'Aggregate Node'}</span>
+    <span class="chip chip-blue">${escapeHtml(meta.level_name || 'Unknown Level')}</span>`;
+  show('recon-node-meta-row','flex');
 }
 
 function toggleReconBaseForecast(checked) {
@@ -3997,6 +4137,7 @@ function renderReconSelectedNode() {
   const displayLabel = meta.display_path || meta.label || nodeId;
   const ctxEl = document.getElementById('node-context-strip-recon');
   if(ctxEl) ctxEl.innerHTML=`<span class="crumb" style="font-size:10px">${escapeHtml(displayLabel)}</span>`;
+  updateReconBreadcrumb(nodeId);
   const preview=(RECON.result.node_previews||{})[nodeId];
   if(!preview){
     destroyChart('recon-chart');
@@ -4565,14 +4706,26 @@ function toggleReconTree() {
   syncReconTreeVisibility();
 }
 
+function setReconBrowseTab(tab) {
+  if(tab === 'tree' && (!RECON.result || RECON.result.preview_truncated)) tab = 'filters';
+  RECON.treeExpanded = tab === 'tree';
+  syncReconTreeVisibility();
+}
+
 function syncReconTreeVisibility() {
   const wrap=document.getElementById('recon-tree-wrap');
-  const icon=document.getElementById('recon-tree-icon');
-  const hint=document.getElementById('recon-tree-hint');
-  if(!wrap || !icon || !hint) return;
-  wrap.style.display = RECON.treeExpanded ? 'block' : 'none';
-  icon.textContent = RECON.treeExpanded ? '▼' : '▶';
-  hint.textContent = RECON.treeExpanded ? 'click to collapse' : 'click to expand';
+  const treeCard=document.getElementById('recon-tree-card');
+  const treeEmpty=document.getElementById('recon-tree-empty');
+  const treeLoading=document.getElementById('recon-tree-loading');
+  if(!wrap || !treeCard || !treeEmpty || !treeLoading) return;
+  const hasResult=!!RECON.result;
+  const truncated=!!RECON.result?.preview_truncated;
+  treeCard.style.display = hasResult && !truncated ? 'block' : 'none';
+  treeEmpty.style.display = hasResult && truncated ? 'block' : 'none';
+  treeLoading.style.display = hasResult ? 'none' : 'block';
+  if(truncated && RECON.treeExpanded) RECON.treeExpanded=false;
+  setHierarchyBrowseTab('recon', RECON.treeExpanded && !truncated ? 'tree' : 'filters');
+  wrap.style.display = hasResult && !truncated ? 'block' : 'none';
 }
 
 function buildReconTree() {
