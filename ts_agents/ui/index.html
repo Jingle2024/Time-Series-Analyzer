@@ -13,13 +13,18 @@
   --tx:#e8f0fe;--tx2:#8faec8;--tx3:#3d5a7a;
   --a1:#3b82f6;--a2:#f97316;--a3:#10b981;--a4:#8b5cf6;--a5:#ef4444;--a6:#06b6d4;
   --r:8px;--r2:12px;--r3:16px;
+  --space-1:clamp(8px,0.8vw,12px);
+  --space-2:clamp(12px,1vw,16px);
+  --space-3:clamp(14px,1.4vw,22px);
+  --sidebar-w:clamp(220px,24vw,300px);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:clamp(14px,0.2vw + 13px,16px);-webkit-text-size-adjust:100%}
 body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;overflow-x:hidden}
 body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(59,130,246,.05) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;z-index:0}
 
 /* HEADER */
-header{position:relative;z-index:10;background:rgba(12,16,25,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:58px}
+header{position:relative;z-index:10;background:rgba(12,16,25,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 var(--space-2);display:flex;align-items:center;justify-content:space-between;min-height:58px;gap:10px;flex-wrap:wrap}
 .logo{display:flex;align-items:center;gap:10px;font-family:'Instrument Serif',serif;font-size:21px}
 .logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--a1),var(--a4));display:flex;align-items:center;justify-content:center;font-size:15px}
 .logo em{color:var(--a1);font-style:normal}
@@ -31,8 +36,8 @@ header{position:relative;z-index:10;background:rgba(12,16,25,.95);backdrop-filte
 .chip-teal{color:var(--a3);border-color:rgba(20,184,166,.4);background:rgba(20,184,166,.1)}
 
 /* TABS */
-.tabs-wrapper{position:relative;z-index:9;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;padding:0 28px;gap:2px}
-.tab-btn{padding:13px 20px;font-size:13px;font-weight:500;background:transparent;border:none;color:var(--tx3);cursor:pointer;position:relative;letter-spacing:.3px;transition:color .2s;display:flex;align-items:center;gap:8px}
+.tabs-wrapper{position:relative;z-index:9;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:0 var(--space-2);gap:2px;scrollbar-width:thin}
+.tab-btn{padding:13px clamp(12px,1.6vw,20px);font-size:13px;font-weight:500;background:transparent;border:none;color:var(--tx3);cursor:pointer;position:relative;letter-spacing:.3px;transition:color .2s;display:flex;align-items:center;gap:8px;white-space:nowrap;flex:0 0 auto}
 .tab-num{width:20px;height:20px;border-radius:50%;border:1px solid var(--tx3);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;transition:all .2s}
 .tab-btn:hover{color:var(--tx2)}
 .tab-btn.active{color:var(--tx)}
@@ -41,20 +46,20 @@ header{position:relative;z-index:10;background:rgba(12,16,25,.95);backdrop-filte
 .tab-btn.active::after{transform:scaleX(1)}
 
 /* MAIN */
-main{position:relative;z-index:1;max-width:1480px;margin:0 auto;padding:28px}
+main{position:relative;z-index:1;width:100%;max-width:100%;padding:var(--space-2)}
 .tab-panel{display:none}
 .tab-panel.active{display:block;animation:fadeUp .3s ease}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 /* CARDS */
-.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r3);padding:22px;position:relative;overflow:hidden}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r3);padding:clamp(14px,1.8vw,22px);position:relative;overflow:hidden;min-width:0}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(59,130,246,.25),transparent)}
 .card-title{font-size:13px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 
 /* GRID */
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 
 /* UPLOAD */
 .upload-zone{border:2px dashed var(--border2);border-radius:var(--r3);padding:52px 32px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg2);position:relative;overflow:hidden}
@@ -331,6 +336,155 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 
 @media(max-width:960px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}main{padding:14px}}
 
+/* ══════════════════════════════════════════════════
+   THREE-ZONE TAB LAYOUT
+   Left sidebar (always-visible controls + tree)
+   Right main (stat bar → results → settings drawer)
+   ══════════════════════════════════════════════════ */
+.tab-layout{display:grid;grid-template-columns:minmax(220px,var(--sidebar-w)) minmax(0,1fr);gap:0;min-height:calc(100vh - 120px);align-items:start}
+@media(max-width:1100px){.tab-layout{grid-template-columns:1fr;}}
+
+/* ── SIDEBAR ── */
+.tab-sidebar{
+  background:var(--bg1);border:1px solid var(--border);border-radius:var(--r3);
+  display:flex;flex-direction:column;overflow:hidden;position:sticky;top:16px;max-height:calc(100vh - 32px);
+}
+.sidebar-header{
+  padding:13px 16px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.6px;text-transform:uppercase;
+}
+.sidebar-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+.sidebar-section:last-child{border-bottom:none;}
+.sidebar-section-label{font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px;}
+
+/* run button section always at top of sidebar */
+.sidebar-section.sidebar-run-section{order:-1;}
+
+/* run button in sidebar — always prominent */
+.sidebar-run-btn{
+  width:100%;padding:10px 0;border-radius:var(--r2);
+  background:linear-gradient(135deg,var(--a1),var(--a4));
+  color:#fff;font-size:13px;font-weight:600;
+  border:none;cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  letter-spacing:.3px;
+}
+.sidebar-run-btn:hover{box-shadow:0 4px 20px rgba(59,130,246,.35);transform:translateY(-1px);}
+.sidebar-run-btn:active{transform:translateY(0);}
+.sidebar-run-btn:disabled{opacity:.4;pointer-events:none;transform:none;}
+
+/* node context chip strip inside sidebar */
+.node-context-strip{
+  padding:8px 16px;background:rgba(59,130,246,.06);
+  border-bottom:1px solid var(--border);
+  display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-height:38px;
+}
+.node-context-strip .crumb{font-size:10px;}
+.node-context-empty{font-size:11px;color:var(--tx3);font-family:'IBM Plex Mono',monospace;}
+
+/* ── MAIN CONTENT AREA ── */
+.tab-main{display:flex;flex-direction:column;gap:0;padding-left:14px;min-width:0;}
+@media(max-width:1100px){.tab-main{padding-left:0;margin-top:14px;}}
+
+/* ── STAT BAR (always at top of main) ── */
+.stat-bar{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;
+  margin-bottom:16px;
+}
+.stat-bar-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);
+  padding:12px 14px;display:flex;flex-direction:column;gap:2px;
+}
+.stat-bar-val{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:500;color:var(--tx);}
+.stat-bar-label{font-size:10px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;}
+.stat-bar-sub{font-size:10px;color:var(--tx2);margin-top:1px;}
+
+/* ── RESULTS REGION ── */
+.results-region{flex:1;}
+.results-placeholder{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 20px;background:var(--bg2);border:1px dashed var(--border2);
+  border-radius:var(--r3);text-align:center;gap:12px;
+}
+.results-placeholder-icon{font-size:40px;opacity:.4;}
+.results-placeholder-text{font-size:14px;color:var(--tx3);}
+.results-placeholder-sub{font-size:12px;color:var(--tx3);opacity:.7;}
+
+/* ── SETTINGS DRAWER ── */
+.settings-drawer{
+  background:var(--bg1);border:1px solid var(--border);border-radius:var(--r3);
+  overflow:hidden;margin-top:16px;
+}
+.settings-drawer-header{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 18px;background:var(--bg2);border-bottom:1px solid var(--border);
+  cursor:pointer;user-select:none;transition:background .15s;
+}
+.settings-drawer-header:hover{background:var(--bg3);}
+.settings-drawer-title{font-size:12px;font-weight:600;color:var(--tx2);letter-spacing:.4px;flex:1;}
+.settings-drawer-chevron{
+  font-size:11px;color:var(--tx3);transition:transform .25s;
+}
+.settings-drawer.open .settings-drawer-chevron{transform:rotate(180deg);}
+.settings-drawer-body{display:none;padding:18px;}
+.settings-drawer.open .settings-drawer-body{display:block;animation:fadeUp .2s ease;}
+.settings-drawer-badge{
+  font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.8px;
+  padding:2px 7px;border-radius:10px;
+  background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);color:var(--a4);
+}
+/* Draw attention to settings drawer when no results yet */
+.settings-drawer.needs-run .settings-drawer-header{
+  border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06);
+}
+.settings-drawer.needs-run .settings-drawer-title{color:var(--a1);}
+
+/* ── EXPORT BAR (always at bottom of results region) ── */
+.export-bar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:14px 18px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r2);margin-top:14px;
+}
+.export-bar-label{font-size:12px;color:var(--tx2);flex:1;}
+
+/* ── CONTEXT BANNER (in results, replaces old scattered banners) ── */
+.context-banner{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:10px 14px;background:rgba(139,92,246,.07);
+  border:1px solid rgba(139,92,246,.2);border-radius:var(--r2);
+  margin-bottom:14px;font-size:12px;
+}
+.context-banner-path{font-family:'IBM Plex Mono',monospace;color:var(--tx2);}
+.context-banner-chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+
+/* ── SECTION DIVIDER inside results ── */
+.result-section-head{
+  font-size:10px;font-weight:600;color:var(--tx3);letter-spacing:.8px;
+  text-transform:uppercase;margin:18px 0 10px;
+  display:flex;align-items:center;gap:8px;
+}
+.result-section-head::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Tighten sidebar tree */
+.tab-sidebar .vis-tree-wrap{max-height:260px;padding:10px 12px;}
+.tab-sidebar .hier-nav-panel{border:none;border-radius:0;}
+.tab-sidebar .hier-nav-header{padding:11px 14px;font-size:11px;}
+.tab-sidebar .node-breadcrumb{padding:8px 14px;}
+.tab-sidebar .node-meta-row{padding:8px 14px;}
+.tab-sidebar .vis-tree-toggle{padding:7px 14px;}
+.tab-sidebar .cascade-select{font-size:11px;padding:5px 8px;}
+/* single-series selector in sidebar */
+.sidebar-series-select{width:100%;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--tx);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;}
+.sidebar-series-select:focus{outline:none;border-color:var(--a1);}
+.sidebar-series-select option{background:var(--bg2);}
+/* mode toggle pills */
+.mode-pills{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:100%;}
+.mode-pill{flex:1;padding:6px 0;text-align:center;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--tx3);transition:all .15s;font-family:'Outfit',sans-serif;}
+.mode-pill:not(:last-child){border-right:1px solid var(--border);}
+.mode-pill.active{background:rgba(59,130,246,.15);color:var(--a1);}
+.mode-pill:hover:not(.active){background:var(--bg3);color:var(--tx2);}
+
 /* ══ FORECAST-ONLY TOGGLE ══ */
 .fc-only-toggle{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;user-select:none;transition:all .2s;font-size:12px;color:var(--tx2);font-family:'Outfit',sans-serif}
 .fc-only-toggle:hover{border-color:var(--a4);color:var(--tx)}
@@ -351,11 +505,11 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 .recon-series-toggle.dimmed{opacity:.45}
 .recon-series-toggle input{accent-color:var(--a1);cursor:pointer}
 .recon-series-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-#recon-chart-viewport{position:relative;width:100%;height:300px}
-.recon-fc-active #recon-chart-viewport{height:360px}
+#recon-chart-viewport{position:relative;width:100%;height:clamp(240px,38vh,360px)}
+.recon-fc-active #recon-chart-viewport{height:clamp(280px,46vh,420px)}
 #recon-chart{width:100%;height:100%!important;display:block}
 #prep-timeline-chart{width:100%;display:block}
-#prep-timeline-container{position:relative;width:100%}
+#prep-timeline-container{position:relative;width:100%;height:clamp(240px,40vh,420px)}
 
 /* ══ RECON FAMILY CONTEXT CHART ══ */
 #recon-family-card {
@@ -363,7 +517,7 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 }
 #recon-family-card canvas {
   width: 100% !important;
-  height: 300px !important;
+  height: clamp(220px,34vh,320px) !important;
   display: block;
 }
 
@@ -433,6 +587,36 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 .season-bar-val{width:60px;color:var(--tx2);font-family:'IBM Plex Mono',monospace;flex-shrink:0}
 .heatmap-cell{width:44px;height:32px;display:flex;align-items:center;justify-content:center;
   font-family:'IBM Plex Mono',monospace;font-size:10px;border-radius:4px;cursor:default}
+
+/* Zoom-friendly responsive adjustments */
+canvas{max-width:100%}
+img,svg{max-width:100%;height:auto}
+.tab-panel,.results-region,.chart-wrap,.tbl-wrap,.export-bar,.settings-drawer,.node-context-strip{min-width:0}
+.feat-rec-row{flex-wrap:wrap}
+
+@media (max-width:1280px){
+  .stat-bar{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media (max-width:1100px){
+  .tab-sidebar{position:relative;top:0;max-height:none}
+}
+
+@media (max-width:820px){
+  header{padding:8px var(--space-2)}
+  .logo{font-size:clamp(18px,4.2vw,21px)}
+  .section-h{font-size:clamp(20px,5.4vw,24px)}
+  .col-row{grid-template-columns:minmax(0,1fr);gap:6px}
+  .node-context-strip,.sidebar-section{padding:10px 12px}
+  .export-bar{padding:12px}
+}
+
+@media (max-width:680px){
+  .stat-bar{grid-template-columns:1fr}
+  .tabs-wrapper{padding:0 8px}
+  .tab-btn{padding:10px 12px;font-size:12px}
+  .tab-num{width:18px;height:18px;font-size:9px}
+}
 </style>
 </head>
 <body>
@@ -539,53 +723,90 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 <!-- ═══════════════ TAB 2 — ANALYZER ═══════════════ -->
 <div class="tab-panel" id="panel-1">
   <div class="section-h">Time Series <em>Analyzer</em></div>
-  <p class="section-sub">Select a series or hierarchy node, then run full decomposition, stationarity, outlier and intermittency analysis.</p>
+  <p class="section-sub">Full decomposition, stationarity, outlier and intermittency analysis for any series or hierarchy node.</p>
 
   <div class="alert alert-info" id="analyze-no-data">⬆ Upload and confirm a dataset in Tab 1 first.</div>
 
   <div id="analyze-ready" style="display:none">
+    <div class="tab-layout">
 
-    <!-- ─── SELECTOR BAR ─── -->
-    <div class="card" style="margin-bottom:18px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <!-- mode toggle -->
-        <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0">
-          <button id="mode-single-btn" class="btn btn-sm" style="border-radius:0;border:none"
-            onclick="setAnalyzeMode('single')">Single Series</button>
-          <button id="mode-hier-btn" class="btn btn-sm" style="border-radius:0;border:none;border-left:1px solid var(--border)"
-            onclick="setAnalyzeMode('hierarchy')">Hierarchy Node</button>
-        </div>
+      <!-- ═══ LEFT SIDEBAR ═══ -->
+      <div class="tab-sidebar">
+        <div class="sidebar-header">⚙ Analysis Controls</div>
 
-        <!-- single series controls (shown when mode=single) -->
-        <div id="single-controls" style="display:flex;gap:10px;align-items:flex-end;flex:1">
-          <div class="form-group" style="flex:1;margin:0">
-            <label class="form-label">Value Column</label>
-            <select class="form-control" id="analyze-series-select" style="padding:7px 10px"></select>
-          </div>
-          <div class="form-group" style="flex:0 0 120px;margin:0">
-            <label class="form-label">Seasonal Period</label>
-            <input type="number" class="form-control" id="analyze-period" placeholder="Auto" min="2" max="365" style="padding:7px 10px">
+        <!-- Mode pills -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Mode</div>
+          <div class="mode-pills">
+            <button class="mode-pill active" id="mode-single-btn" onclick="setAnalyzeMode('single')">Single Series</button>
+            <button class="mode-pill" id="mode-hier-btn" onclick="setAnalyzeMode('hierarchy')">Hierarchy Node</button>
           </div>
         </div>
 
-        <!-- hierarchy node controls (shown when mode=hierarchy) -->
-        <div id="hier-node-controls" style="display:none;flex:1">
-          <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
-            Select hierarchy node using cascading dropdowns or the visual tree below ↓
+        <!-- Single series selector -->
+        <div class="sidebar-section" id="single-controls">
+          <div class="sidebar-section-label">Value Column</div>
+          <select class="sidebar-series-select" id="analyze-series-select"></select>
+          <div style="margin-top:10px">
+            <div class="sidebar-section-label">Seasonal Period</div>
+            <input type="number" class="form-control" id="analyze-period" placeholder="Auto-detect" min="2" max="365" style="font-size:12px;padding:6px 10px">
           </div>
-          <div id="cascade-dropdowns" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end"></div>
         </div>
 
-        <div class="form-group" style="flex:0 0 160px;margin:0">
-          <label class="form-label">Interval Mode</label>
-          <select class="form-control" id="analyze-interval-mode" onchange="setAnalyzeIntervalMode()">
+        <!-- Hierarchy tree panel (shown when mode=hierarchy) -->
+        <div id="hier-node-controls" style="display:none">
+          <!-- Node context strip -->
+          <div class="node-context-strip" id="node-context-strip-analyze">
+            <span class="node-context-empty">No node selected</span>
+          </div>
+
+          <!-- Hierarchy nav panel -->
+          <div class="hier-nav-panel">
+            <div class="hier-nav-header">
+              🌲 Hierarchy Navigator
+              <span class="chip chip-violet" style="margin-left:auto;font-size:9px" id="tree-total-leaves">0 leaves</span>
+            </div>
+            <div class="vis-tree-toggle" onclick="toggleVisTree()" id="vis-tree-toggle-btn">
+              <span id="vis-tree-icon">▶</span>
+              <span>Visual Tree</span>
+              <span style="margin-left:auto;font-size:10px">expand</span>
+            </div>
+            <div class="vis-tree-wrap" id="vis-tree-wrap" style="display:none">
+              <div id="vis-tree-root"></div>
+            </div>
+            <div style="padding:10px 14px;border-top:1px solid var(--border)">
+              <div class="sidebar-section-label">Cascading Selection</div>
+              <div id="tree-cascade-selects" style="display:flex;flex-direction:column;gap:6px"></div>
+            </div>
+            <div class="node-breadcrumb" id="node-breadcrumb">
+              <div class="breadcrumb-label">Selected Node</div>
+              <div class="breadcrumb-path" id="breadcrumb-path">
+                <span style="color:var(--tx3);font-size:11px">No node selected</span>
+              </div>
+            </div>
+            <div class="node-meta-row" id="node-meta-row" style="display:none"></div>
+          </div>
+
+          <!-- Aggregation settings (for non-leaf nodes) -->
+          <div class="sidebar-section" id="node-agg-card">
+            <div class="sidebar-section-label">Aggregation (non-leaf)</div>
+            <select class="sidebar-series-select" id="node-agg-method" style="margin-bottom:8px">
+              <option value="sum">Sum — additive (sales, demand)</option>
+              <option value="mean">Mean — stock / rate</option>
+            </select>
+            <div class="sidebar-section-label" style="margin-top:8px">Seasonal Period</div>
+            <input type="number" class="form-control" id="node-period" placeholder="Auto-detect" min="2" max="365" style="font-size:12px;padding:6px 10px">
+          </div>
+        </div>
+
+        <!-- Interval settings -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Interval</div>
+          <select class="sidebar-series-select" id="analyze-interval-mode" onchange="setAnalyzeIntervalMode()" style="margin-bottom:6px">
             <option value="session">Use Session Interval</option>
             <option value="manual">Manual Interval</option>
           </select>
-        </div>
-        <div class="form-group" style="flex:0 0 150px;margin:0">
-          <label class="form-label">Manual Interval</label>
-          <select class="form-control" id="analyze-target-freq" disabled>
+          <select class="sidebar-series-select" id="analyze-target-freq" disabled>
             <option value="D">Daily (D)</option>
             <option value="W">Weekly (W)</option>
             <option value="MS" selected>Monthly (MS)</option>
@@ -594,140 +815,77 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
           </select>
         </div>
 
-        <button class="btn btn-primary" onclick="runAnalysis()" id="run-analysis-btn">▶ Run Analysis</button>
-      </div>
-    </div>
+        <!-- Run button -->
+        <div class="sidebar-section sidebar-run-section">
+          <button class="sidebar-run-btn" onclick="runAnalysis()" id="run-analysis-btn">▶ Run Analysis</button>
+          <div id="analyze-loader" style="display:none;margin-top:10px" class="loader-wrap">
+            <div class="spinner"></div>
+            <span class="loader-text" id="analyze-loader-msg">Running…</span>
+          </div>
+        </div>
+      </div><!-- /sidebar -->
 
-    <!-- ─── HIERARCHY TREE NAVIGATOR (shown when hierarchy mode) ─── -->
-    <div id="hier-tree-section" style="display:none;margin-bottom:18px">
-      <div style="display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start">
+      <!-- ═══ MAIN CONTENT ═══ -->
+      <div class="tab-main">
 
-        <!-- LEFT: tree panel -->
-        <div class="hier-nav-panel">
-          <div class="hier-nav-header">
-            🌲 Hierarchy Navigator
-            <span class="chip chip-violet" style="margin-left:auto" id="tree-total-leaves">0 leaves</span>
+        <!-- Stat bar (populated after run) -->
+        <div class="stat-bar" id="analyze-stats-row" style="display:none"></div>
+
+        <!-- Results region -->
+        <div class="results-region" id="analyze-results-region">
+
+          <!-- Empty state -->
+          <div class="results-placeholder" id="analyze-empty-state">
+            <div class="results-placeholder-icon">📈</div>
+            <div class="results-placeholder-text">Select a series or hierarchy node, then run analysis</div>
+            <div class="results-placeholder-sub">Results will appear here — charts, decomposition, stationarity tests</div>
           </div>
 
-          <!-- Visual collapsible tree -->
-          <div class="vis-tree-toggle" onclick="toggleVisTree()" id="vis-tree-toggle-btn">
-            <span id="vis-tree-icon">▶</span>
-            <span>Visual Tree</span>
-            <span style="margin-left:auto;font-size:10px">click to expand</span>
-          </div>
-          <div class="vis-tree-wrap" id="vis-tree-wrap" style="display:none">
-            <div id="vis-tree-root"></div>
-          </div>
+          <!-- Results (hidden until run) -->
+          <div id="analyze-results" style="display:none">
+            <!-- Context banner -->
+            <div id="analysis-context-banner" style="margin-bottom:14px"></div>
 
-          <!-- Cascading selects (always visible) -->
-          <div style="padding:14px 16px;border-top:1px solid var(--border)">
-            <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">
-              Cascading Selection
+            <!-- Main chart + component strengths -->
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:16px">
+              <div class="chart-wrap">
+                <div class="chart-title">Original Series + Trend + Outliers</div>
+                <canvas id="main-chart" height="200"></canvas>
+              </div>
+              <div class="card" style="display:flex;flex-direction:column;gap:12px">
+                <div class="card-title">📊 Component Strengths</div>
+                <div id="strength-bars"></div>
+                <div class="divider"></div>
+                <div class="card-title">🤖 Model Recommendation</div>
+                <div id="model-rec-box"></div>
+              </div>
             </div>
-            <div id="tree-cascade-selects" style="display:flex;flex-direction:column;gap:8px"></div>
-          </div>
 
-          <!-- Breadcrumb of selected path -->
-          <div class="node-breadcrumb" id="node-breadcrumb">
-            <div class="breadcrumb-label">Selected Node</div>
-            <div class="breadcrumb-path" id="breadcrumb-path">
-              <span style="color:var(--tx3);font-size:12px">No node selected yet</span>
+            <div class="result-section-head">Decomposition</div>
+            <div class="grid-2" style="margin-bottom:16px">
+              <div class="chart-wrap"><div class="chart-title">Trend Component</div><canvas id="trend-chart" height="130"></canvas></div>
+              <div class="chart-wrap"><div class="chart-title">Seasonal Component</div><canvas id="seasonal-chart" height="130"></canvas></div>
             </div>
-          </div>
-
-          <!-- Node meta info -->
-          <div class="node-meta-row" id="node-meta-row" style="display:none"></div>
-        </div>
-
-        <!-- RIGHT: node summary (pre-analysis) -->
-        <div id="node-preview-panel" style="display:flex;flex-direction:column;gap:14px">
-          <div class="card">
-            <div class="card-title">📍 Current Node</div>
-            <div id="node-summary-pre" style="color:var(--tx3);font-size:13px">
-              Select a node from the tree or dropdowns to preview it.
+            <div class="grid-2" style="margin-bottom:16px">
+              <div class="chart-wrap"><div class="chart-title">Cycle (HP Filter)</div><canvas id="cycle-chart" height="130"></canvas></div>
+              <div class="chart-wrap"><div class="chart-title">Residual</div><canvas id="residual-chart" height="130"></canvas></div>
             </div>
-          </div>
-          <div class="card" id="node-agg-card">
-            <div class="card-title">⚙ Aggregation</div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label class="form-label">Method (for non-leaf nodes)</label>
-              <select class="form-control" id="node-agg-method">
-                <option value="sum">Sum — additive quantities (sales, demand)</option>
-                <option value="mean">Mean — stock / rate quantities</option>
-              </select>
+
+            <div class="result-section-head">Diagnostics</div>
+            <div class="grid-2" style="margin-bottom:16px">
+              <div class="card"><div class="card-title">🔬 Stationarity Tests</div><div id="stat-tests-body"></div></div>
+              <div class="card"><div class="card-title">⚡ Outlier Summary</div><div id="outlier-summary-body"></div></div>
             </div>
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Seasonal Period</label>
-              <input type="number" class="form-control" id="node-period" placeholder="Auto-detect" min="2" max="365">
+            <div class="grid-2">
+              <div class="card"><div class="card-title">💤 Intermittency</div><div id="intermittency-body"></div></div>
+              <div class="card"><div class="card-title">🕳 Missing Values</div><div id="missing-body"></div></div>
             </div>
-          </div>
-        </div>
+          </div><!-- /#analyze-results -->
 
-      </div>
-    </div>
+        </div><!-- /.results-region -->
 
-    <!-- ─── ANALYSIS RESULTS ─── -->
-    <div id="analyze-loader" style="display:none" class="loader-wrap">
-      <div class="spinner"></div>
-      <span class="loader-text" id="analyze-loader-msg">Running analysis pipeline…</span>
-    </div>
-
-    <div id="analyze-results" style="display:none">
-
-      <!-- Node / series context banner -->
-      <div id="analysis-context-banner" style="margin-bottom:16px"></div>
-
-      <!-- Stat cards row -->
-      <div class="grid-4" id="analyze-stats-row" style="margin-bottom:18px"></div>
-
-      <!-- Main chart + model rec -->
-      <div style="display:grid;grid-template-columns:1fr 320px;gap:18px;margin-bottom:18px">
-        <div class="chart-wrap">
-          <div class="chart-title">Original Series + Trend + Outliers</div>
-          <canvas id="main-chart" height="200"></canvas>
-        </div>
-        <div class="card" style="display:flex;flex-direction:column;gap:14px">
-          <div class="card-title">📊 Component Strengths</div>
-          <div id="strength-bars"></div>
-          <div class="divider"></div>
-          <div class="card-title">🤖 Model Recommendation</div>
-          <div id="model-rec-box"></div>
-        </div>
-      </div>
-
-      <!-- Decomposition charts 2x2 -->
-      <div class="grid-2" style="margin-bottom:18px">
-        <div class="chart-wrap"><div class="chart-title">Trend Component</div><canvas id="trend-chart" height="140"></canvas></div>
-        <div class="chart-wrap"><div class="chart-title">Seasonal Component</div><canvas id="seasonal-chart" height="140"></canvas></div>
-      </div>
-      <div class="grid-2" style="margin-bottom:18px">
-        <div class="chart-wrap"><div class="chart-title">Cycle (HP Filter)</div><canvas id="cycle-chart" height="140"></canvas></div>
-        <div class="chart-wrap"><div class="chart-title">Residual</div><canvas id="residual-chart" height="140"></canvas></div>
-      </div>
-
-      <!-- Detail cards -->
-      <div class="grid-2" style="margin-bottom:18px">
-        <div class="card">
-          <div class="card-title">🔬 Stationarity Tests</div>
-          <div id="stat-tests-body"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">⚡ Outlier Summary</div>
-          <div id="outlier-summary-body"></div>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title">💤 Intermittency</div>
-          <div id="intermittency-body"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">🕳 Missing Values</div>
-          <div id="missing-body"></div>
-        </div>
-      </div>
-    </div>
-
+      </div><!-- /.tab-main -->
+    </div><!-- /.tab-layout -->
   </div><!-- /#analyze-ready -->
 </div>
 <!-- END TAB 2 -->
@@ -826,345 +984,412 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
 <!-- ═══════════════ TAB 4 — PREPARE DATA ═══════════════ -->
 <div class="tab-panel" id="panel-3">
   <div class="section-h">Forecast <em>Preparation</em></div>
-  <p class="section-sub">Build one model-ready series dataset with explicit train/validation/test/holdout/future splits.</p>
+  <p class="section-sub">Build a model-ready series with train / validation / test / holdout / future splits.</p>
 
   <div class="alert alert-info" id="prep-no-data">⬆ Upload and confirm a dataset in Tab 1 first.</div>
 
   <div id="prep-content" style="display:none">
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Mode &amp; Series</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-        <button class="btn btn-primary" id="prep-mode-single-btn" onclick="setPrepMode('single')">Single Series</button>
-        <button class="btn btn-secondary" id="prep-mode-hier-btn" onclick="setPrepMode('hierarchy')">Hierarchy Node</button>
-        <div class="form-group" style="margin:0;flex:0 0 220px">
-          <label class="form-label">Dependent Series</label>
-          <select class="form-control" id="prep-series-select"></select>
-        </div>
-      </div>
+    <div class="tab-layout">
 
-      <!-- ─── HIERARCHY TREE NAVIGATOR (shown when hierarchy mode) ─── -->
-      <div id="prep-hier-wrap" style="display:none">
-        <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">
-          Select hierarchy node using the visual tree or cascading dropdowns below ↓
-        </div>
-        <div style="display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start">
+      <!-- ═══ LEFT SIDEBAR ═══ -->
+      <div class="tab-sidebar">
+        <div class="sidebar-header">⚙ Preparation Controls</div>
 
-          <!-- LEFT: tree panel -->
+        <!-- Mode pills -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Mode</div>
+          <div class="mode-pills">
+            <button class="mode-pill active" id="prep-mode-single-btn" onclick="setPrepMode('single')">Single</button>
+            <button class="mode-pill" id="prep-mode-hier-btn" onclick="setPrepMode('hierarchy')">Hierarchy</button>
+          </div>
+        </div>
+
+        <!-- Dependent series selector (always shown) -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Dependent Series</div>
+          <select class="sidebar-series-select" id="prep-series-select"></select>
+        </div>
+
+        <!-- Hierarchy tree (shown when hierarchy mode) -->
+        <div id="prep-hier-wrap" style="display:none">
+          <!-- Node context strip -->
+          <div class="node-context-strip" id="node-context-strip-prep">
+            <span class="node-context-empty">No node selected</span>
+          </div>
           <div class="hier-nav-panel">
             <div class="hier-nav-header">
               🌲 Hierarchy Navigator
-              <span class="chip chip-violet" style="margin-left:auto" id="prep-tree-total-leaves">0 leaves</span>
+              <span class="chip chip-violet" style="margin-left:auto;font-size:9px" id="prep-tree-total-leaves">0 leaves</span>
             </div>
-
-            <!-- Visual collapsible tree -->
             <div class="vis-tree-toggle" onclick="togglePrepVisTree()" id="prep-vis-tree-toggle-btn">
               <span id="prep-vis-tree-icon">▶</span>
               <span>Visual Tree</span>
-              <span style="margin-left:auto;font-size:10px">click to expand</span>
+              <span style="margin-left:auto;font-size:10px">expand</span>
             </div>
             <div class="vis-tree-wrap" id="prep-vis-tree-wrap" style="display:none">
               <div id="prep-vis-tree-root"></div>
             </div>
-
-            <!-- Cascading selects (always visible) -->
-            <div style="padding:14px 16px;border-top:1px solid var(--border)">
-              <div style="font-size:11px;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">
-                Cascading Selection
-              </div>
-              <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:8px"></div>
+            <div style="padding:10px 14px;border-top:1px solid var(--border)">
+              <div class="sidebar-section-label">Cascading Selection</div>
+              <div id="prep-hier-cascade" style="display:flex;flex-direction:column;gap:6px"></div>
             </div>
-
-            <!-- Breadcrumb of selected path -->
             <div class="node-breadcrumb" id="prep-node-breadcrumb">
               <div class="breadcrumb-label">Selected Node</div>
               <div class="breadcrumb-path" id="prep-breadcrumb-path">
-                <span style="color:var(--tx3);font-size:12px">No node selected yet</span>
+                <span style="color:var(--tx3);font-size:11px">No node selected</span>
               </div>
             </div>
-
-            <!-- Node meta info -->
             <div class="node-meta-row" id="prep-node-meta-row" style="display:none"></div>
           </div>
-
-          <!-- RIGHT: node summary panel -->
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <div class="card">
-              <div class="card-title">📍 Selected Node</div>
-              <div id="prep-node-summary-pre" style="color:var(--tx3);font-size:13px">
-                Select a node from the tree or dropdowns to preview it.
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-title">⚙ Aggregation Note</div>
-              <div id="prep-hier-note" style="font-size:12px;color:var(--tx2);line-height:1.6">
-                Choose one or more hierarchy levels. Leave lower levels as <em>All</em> to prepare an aggregated forecast.
-              </div>
+          <div class="sidebar-section">
+            <div style="font-size:11px;color:var(--tx2);line-height:1.6" id="prep-hier-note">
+              Choose one or more hierarchy levels.
             </div>
           </div>
-
         </div>
-      </div>
-    </div>
 
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Configuration</div>
-      <div class="grid-3">
-        <div class="form-group">
-          <label class="form-label">Transform</label>
-          <select class="form-control" id="prep-transform">
+        <!-- Run button -->
+        <div class="sidebar-section sidebar-run-section">
+          <button class="sidebar-run-btn" id="run-forecast-prep-btn" onclick="runForecastPrep()">▶ Run Preparation</button>
+          <div id="prep-loader" style="display:none;margin-top:10px" class="loader-wrap">
+            <div class="spinner"></div><span class="loader-text">Preparing series…</span>
+          </div>
+        </div>
+      </div><!-- /sidebar -->
+
+      <!-- ═══ MAIN CONTENT ═══ -->
+      <div class="tab-main">
+
+        <!-- Stat bar -->
+        <div class="stat-bar" id="prep-stats-row" style="display:none"></div>
+
+        <!-- Results region -->
+        <div class="results-region">
+
+          <!-- Empty state -->
+          <div class="results-placeholder" id="prep-empty-state">
+            <div class="results-placeholder-icon">🗂</div>
+            <div class="results-placeholder-text">Configure settings, then run preparation</div>
+            <div class="results-placeholder-sub">Timeline, model comparison and feature matrix will appear here</div>
+          </div>
+
+          <!-- Results -->
+          <div id="prep-results" style="display:none">
+
+            <!-- Timeline chart -->
+            <div class="card fc-only-card" id="prep-timeline-card" style="margin-bottom:14px">
+              <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                <span>Timeline<span id="fc-only-badge">FORECAST VIEW</span></span>
+                <label class="fc-only-toggle" id="fc-only-toggle-btn" title="Show forecast + holdout only">
+                  <input type="checkbox" class="fc-chk" id="fc-only-chk" onchange="toggleForecastOnly(this.checked)">
+                  <span>🔭 Forecast Only</span>
+                </label>
+              </div>
+              <div id="prep-model-toolbar" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px"></div>
+              <div id="prep-model-summary" style="margin-bottom:10px;font-size:12px;color:var(--tx2)"></div>
+              <div id="prep-timeline-container" style="position:relative;width:100%">
+                <canvas id="prep-timeline-chart"></canvas>
+              </div>
+              <div id="prep-timeline-meta" style="margin-top:8px;font-size:12px;color:var(--tx2)"></div>
+            </div>
+
+            <!-- Model comparison -->
+            <div class="grid-2" style="margin-bottom:14px">
+              <div class="card">
+                <div class="card-title">Model Parameters</div>
+                <div id="prep-model-params" class="grid-3"></div>
+              </div>
+              <div class="card">
+                <div class="card-title">Model Comparison (MAPE)</div>
+                <div id="prep-model-best" style="margin-bottom:6px;font-size:12px;color:var(--tx2)"></div>
+                <div id="prep-model-legend" style="margin-bottom:6px;font-size:12px;color:var(--tx3)"></div>
+                <div class="tbl-wrap" id="prep-model-compare" style="max-height:200px;overflow:auto"></div>
+              </div>
+            </div>
+
+            <div class="result-section-head">Data Previews</div>
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title">Feature Matrix Preview</div>
+              <div class="tbl-wrap" id="prep-feature-preview" style="max-height:240px;overflow:auto"></div>
+            </div>
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title">Future Frame Preview</div>
+              <div class="tbl-wrap" id="prep-future-preview" style="max-height:200px;overflow:auto"></div>
+            </div>
+
+            <!-- Export bar -->
+            <div class="export-bar">
+              <span class="export-bar-label" id="prep-export-info">Ready to export</span>
+              <button class="btn btn-download" onclick="downloadForecastPrep()">⬇ Download Forecast Prep Output</button>
+            </div>
+
+          </div><!-- /#prep-results -->
+        </div><!-- /.results-region -->
+
+        <!-- ── SETTINGS DRAWER (collapsed once results exist) ── -->
+        <div class="settings-drawer needs-run" id="prep-settings-drawer">
+          <div class="settings-drawer-header" onclick="toggleDrawer('prep-settings-drawer')">
+            <span class="settings-drawer-title">⚙ Configuration &amp; Parameters</span>
+            <span class="settings-drawer-badge" id="prep-settings-badge">CONFIGURE</span>
+            <span class="settings-drawer-chevron">▲</span>
+          </div>
+          <div class="settings-drawer-body">
+
+            <div class="grid-3" style="margin-bottom:14px">
+              <div class="form-group">
+                <label class="form-label">Transform</label>
+                <select class="form-control" id="prep-transform">
             <option value="auto">Auto</option>
             <option value="none">None</option>
-            <option value="log">Log(1+y)</option>
-            <option value="diff">First difference</option>
-            <option value="log_diff">Log + Diff</option>
-            <option value="boxcox">Box-Cox</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Scaling</label>
-          <select class="form-control" id="prep-scale">
-            <option value="minmax">MinMax [0,1]</option>
-            <option value="standard">Standard (z-score)</option>
-            <option value="robust">Robust (median/IQR)</option>
-            <option value="none">None</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Forecast Horizon</label>
-          <input type="number" class="form-control" id="prep-horizon" value="13" min="1">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Holdout Periods</label>
-          <input type="number" class="form-control" id="prep-holdout" value="0" min="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Train Ratio</label>
-          <input type="number" class="form-control" id="prep-train-ratio" value="0.70" min="0.1" max="0.95" step="0.01">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Validation Ratio</label>
-          <input type="number" class="form-control" id="prep-val-ratio" value="0.15" min="0" max="0.5" step="0.01">
-        </div>
-      </div>
-      <div class="grid-3" style="margin-top:6px">
-        <div class="form-group">
-          <label class="form-label">Interval Selection</label>
-          <select class="form-control" id="prep-interval-mode" onchange="setPrepIntervalMode()">
-            <option value="session">Use Session Interval</option>
-            <option value="advisor">Use Interval Advisor</option>
-            <option value="manual">Manual Interval</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Manual Interval</label>
-          <select class="form-control" id="prep-target-freq" disabled>
-            <option value="H">Hourly (H)</option>
-            <option value="D">Daily (D)</option>
-            <option value="W">Weekly (W)</option>
-            <option value="2W">Bi-Weekly (2W)</option>
-            <option value="MS" selected>Monthly (MS)</option>
-            <option value="QS">Quarterly (QS)</option>
-            <option value="AS">Yearly (AS)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Quantity Type</label>
-          <select class="form-control" id="prep-qty-type">
-            <option value="flow" selected>Flow</option>
-            <option value="stock">Stock</option>
-            <option value="rate">Rate</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Accumulation Method</label>
-          <select class="form-control" id="prep-accum-method">
-            <option value="auto" selected>Auto</option>
-            <option value="sum">Sum</option>
-            <option value="mean">Mean</option>
-            <option value="median">Median</option>
-            <option value="last">Last</option>
-            <option value="first">First</option>
-            <option value="max">Max</option>
-            <option value="min">Min</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid-3" style="margin-top:6px">
-        <div class="toggle-group" style="margin-top:24px">
-          <label class="toggle"><input type="checkbox" id="prep-apply-missing" checked><span class="toggle-slider"></span></label>
-          <span>Apply Missing Value Treatment</span>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Missing Method</label>
-          <select class="form-control" id="prep-missing-method">
-            <option value="auto" selected>Auto</option>
-            <option value="linear">Linear</option>
-            <option value="spline">Spline</option>
-            <option value="seasonal">Seasonal</option>
-            <option value="forward_fill">Forward Fill</option>
-            <option value="backward_fill">Backward Fill</option>
-            <option value="knn">KNN</option>
-            <option value="mean">Mean</option>
-            <option value="median">Median</option>
-            <option value="zero">Zero</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Missing Seasonal Period</label>
-          <input type="number" class="form-control" id="prep-missing-period" value="7" min="2">
-        </div>
-      </div>
-      <div class="grid-3" style="margin-top:6px">
-        <div class="toggle-group" style="margin-top:24px">
-          <label class="toggle"><input type="checkbox" id="prep-zero-missing"><span class="toggle-slider"></span></label>
-          <span>Treat zero as missing</span>
-        </div>
-        <div class="toggle-group" style="margin-top:24px">
-          <label class="toggle"><input type="checkbox" id="prep-apply-outlier" checked><span class="toggle-slider"></span></label>
-          <span>Apply Outlier Treatment</span>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Outlier Treatment</label>
-          <select class="form-control" id="prep-outlier-treatment">
-            <option value="cap" selected>Cap (IQR fence)</option>
-            <option value="remove">Remove + Impute</option>
-            <option value="keep">Keep (detect only)</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group" style="margin-top:6px">
-        <label class="form-label">Outlier Methods</label>
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-iqr" checked> IQR</label>
-          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-zscore" checked> Z-Score</label>
-          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-isof" checked> IsolationForest</label>
-          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-lof"> LOF</label>
-        </div>
-      </div>
-      <div class="grid-2" style="margin-top:6px">
-        <div class="form-group">
-          <label class="form-label">Rolling Windows (comma-separated)</label>
-          <input type="text" class="form-control" id="prep-windows" value="7,14,28">
-        </div>
-        <div class="toggle-group" style="margin-top:24px">
-          <label class="toggle"><input type="checkbox" id="prep-calendar" checked><span class="toggle-slider"></span></label>
-          <span>Calendar features</span>
-        </div>
-      </div>
-      <div class="toggle-group" style="margin-top:4px">
-        <label class="toggle"><input type="checkbox" id="prep-neg-allowed"><span class="toggle-slider"></span></label>
-        <span>Negative Forecast Allowed</span>
-      </div>
-      <div class="toggle-group" style="margin-top:4px">
-        <label class="toggle"><input type="checkbox" id="prep-combo-models"><span class="toggle-slider"></span></label>
-        <span>Combination Models (SimpleAvg, WeightedAvg, Median, BestTrio)</span>
-      </div>
-      <div class="form-group" style="margin-top:10px">
-        <label class="form-label">Export Format</label>
-        <div class="radio-pills">
-          <div class="radio-pill"><input type="radio" name="prep-out-fmt" id="prep-out-excel" value="excel" checked><label for="prep-out-excel">Excel (.xlsx)</label></div>
-          <div class="radio-pill"><input type="radio" name="prep-out-fmt" id="prep-out-csv" value="csv"><label for="prep-out-csv">CSV Bundle (.zip)</label></div>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px">
-        <button class="btn btn-primary btn-lg" id="run-forecast-prep-btn" onclick="runForecastPrep()">Run Forecast Preparation</button>
-      </div>
-      <div id="prep-loader" style="display:none" class="loader-wrap"><div class="spinner"></div><span class="loader-text">Preparing series…</span></div>
-    </div>
+                  <option value="log">Log(1+y)</option>
+                  <option value="diff">First difference</option>
+                  <option value="log_diff">Log + Diff</option>
+                  <option value="boxcox">Box-Cox</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Scaling</label>
+                <select class="form-control" id="prep-scale">
+                  <option value="minmax">MinMax [0,1]</option>
+                  <option value="standard">Standard (z-score)</option>
+                  <option value="robust">Robust (median/IQR)</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Forecast Horizon</label>
+                <input type="number" class="form-control" id="prep-horizon" value="13" min="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Holdout Periods</label>
+                <input type="number" class="form-control" id="prep-holdout" value="0" min="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Train Ratio</label>
+                <input type="number" class="form-control" id="prep-train-ratio" value="0.70" min="0.1" max="0.95" step="0.01">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Validation Ratio</label>
+                <input type="number" class="form-control" id="prep-val-ratio" value="0.15" min="0" max="0.5" step="0.01">
+              </div>
+            </div>
 
-    <div id="prep-results" style="display:none">
-      <div class="grid-4" id="prep-stats-row" style="margin-bottom:16px"></div>
-      <div class="card fc-only-card" id="prep-timeline-card" style="margin-bottom:16px">
-        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <span>Timeline<span id="fc-only-badge">FORECAST VIEW</span></span>
-          <label class="fc-only-toggle" id="fc-only-toggle-btn" title="Hide the historical train/val/test data and zoom into the forecast + holdout region only">
-            <input type="checkbox" class="fc-chk" id="fc-only-chk" onchange="toggleForecastOnly(this.checked)">
-            <span>🔭 Show Forecast Only</span>
-          </label>
-        </div>
-        <div id="prep-model-toolbar" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px"></div>
-        <div id="prep-model-summary" style="margin-bottom:10px;font-size:12px;color:var(--tx2)"></div>
-        <div id="prep-timeline-container" style="position:relative;width:100%">
-          <canvas id="prep-timeline-chart"></canvas>
-        </div>
-        <div id="prep-timeline-meta" style="margin-top:8px;font-size:12px;color:var(--tx2)"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Model Parameters</div>
-        <div id="prep-model-params" class="grid-3"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Model Comparison (MAPE)</div>
-        <div id="prep-model-best" style="margin-bottom:8px;font-size:12px;color:var(--tx2)"></div>
-        <div id="prep-model-legend" style="margin-bottom:8px;font-size:12px;color:var(--tx3)"></div>
-        <div class="tbl-wrap" id="prep-model-compare" style="max-height:220px;overflow:auto"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Feature Matrix Preview</div>
-        <div class="tbl-wrap" id="prep-feature-preview" style="max-height:280px;overflow:auto"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Future Frame Preview</div>
-        <div class="tbl-wrap" id="prep-future-preview" style="max-height:220px;overflow:auto"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Agent Report</div>
-        <pre id="prep-report" style="white-space:pre-wrap;color:var(--tx2);font-size:12px;line-height:1.45;margin:0"></pre>
-      </div>
-      <div class="card" style="margin-top:16px">
-        <div class="card-title">Export</div>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-download btn-lg" onclick="downloadForecastPrep()">⬇ Download Forecast Prep Output</button>
-          <span id="prep-export-info" style="font-size:12px;color:var(--tx2)"></span>
-        </div>
-      </div>
-    </div>
-  </div>
+            <div class="grid-3" style="margin-bottom:14px">
+              <div class="form-group">
+                <label class="form-label">Interval Selection</label>
+                <select class="form-control" id="prep-interval-mode" onchange="setPrepIntervalMode()">
+                  <option value="session">Use Session Interval</option>
+                  <option value="advisor">Use Interval Advisor</option>
+                  <option value="manual">Manual Interval</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Manual Interval</label>
+                <select class="form-control" id="prep-target-freq" disabled>
+                  <option value="H">Hourly (H)</option>
+                  <option value="D">Daily (D)</option>
+                  <option value="W">Weekly (W)</option>
+                  <option value="2W">Bi-Weekly (2W)</option>
+                  <option value="MS" selected>Monthly (MS)</option>
+                  <option value="QS">Quarterly (QS)</option>
+                  <option value="AS">Yearly (AS)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Quantity Type</label>
+                <select class="form-control" id="prep-qty-type">
+                  <option value="flow" selected>Flow</option>
+                  <option value="stock">Stock</option>
+                  <option value="rate">Rate</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Accumulation Method</label>
+                <select class="form-control" id="prep-accum-method">
+                  <option value="auto" selected>Auto</option>
+                  <option value="sum">Sum</option>
+                  <option value="mean">Mean</option>
+                  <option value="median">Median</option>
+                  <option value="last">Last</option>
+                  <option value="first">First</option>
+                  <option value="max">Max</option>
+                  <option value="min">Min</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-3" style="margin-bottom:14px">
+              <div class="toggle-group" style="margin-top:24px">
+                <label class="toggle"><input type="checkbox" id="prep-apply-missing" checked><span class="toggle-slider"></span></label>
+                <span>Apply Missing Value Treatment</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Missing Method</label>
+                <select class="form-control" id="prep-missing-method">
+                  <option value="auto" selected>Auto</option>
+                  <option value="linear">Linear</option>
+                  <option value="spline">Spline</option>
+                  <option value="seasonal">Seasonal</option>
+                  <option value="forward_fill">Forward Fill</option>
+                  <option value="backward_fill">Backward Fill</option>
+                  <option value="knn">KNN</option>
+                  <option value="mean">Mean</option>
+                  <option value="median">Median</option>
+                  <option value="zero">Zero</option>
+                      </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Missing Seasonal Period</label>
+                <input type="number" class="form-control" id="prep-missing-period" value="7" min="2">
+              </div>
+            </div>
+
+            <div class="grid-3" style="margin-bottom:14px">
+              <div class="toggle-group" style="margin-top:24px">
+                <label class="toggle"><input type="checkbox" id="prep-zero-missing"><span class="toggle-slider"></span></label>
+                <span>Treat zero as missing</span>
+              </div>
+              <div class="toggle-group" style="margin-top:24px">
+                <label class="toggle"><input type="checkbox" id="prep-apply-outlier" checked><span class="toggle-slider"></span></label>
+                <span>Apply Outlier Treatment</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Outlier Treatment</label>
+                <select class="form-control" id="prep-outlier-treatment">
+                  <option value="cap" selected>Cap (IQR fence)</option>
+                  <option value="remove">Remove + Impute</option>
+                  <option value="keep">Keep (detect only)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">Outlier Methods</label>
+              <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-iqr" checked> IQR</label>
+                <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-zscore" checked> Z-Score</label>
+                <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-isof" checked> IsolationForest</label>
+                <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="prep-outlier-lof"> LOF</label>
+              </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom:10px">
+              <div class="form-group">
+                <label class="form-label">Rolling Windows (comma-separated)</label>
+                <input type="text" class="form-control" id="prep-windows" value="7,14,28">
+              </div>
+              <div class="toggle-group" style="margin-top:24px">
+                <label class="toggle"><input type="checkbox" id="prep-calendar" checked><span class="toggle-slider"></span></label>
+                <span>Calendar features</span>
+              </div>
+            </div>
+
+            <div class="toggle-group" style="margin-bottom:6px">
+              <label class="toggle"><input type="checkbox" id="prep-neg-allowed"><span class="toggle-slider"></span></label>
+              <span>Negative Forecast Allowed</span>
+            </div>
+            <div class="toggle-group" style="margin-bottom:14px">
+              <label class="toggle"><input type="checkbox" id="prep-combo-models"><span class="toggle-slider"></span></label>
+              <span>Combination Models (SimpleAvg, WeightedAvg, Median, BestTrio)</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Export Format</label>
+              <div class="radio-pills">
+                <div class="radio-pill"><input type="radio" name="prep-out-fmt" id="prep-out-excel" value="excel" checked><label for="prep-out-excel">Excel (.xlsx)</label></div>
+                <div class="radio-pill"><input type="radio" name="prep-out-fmt" id="prep-out-csv" value="csv"><label for="prep-out-csv">CSV Bundle (.zip)</label></div>
+              </div>
+            </div>
+
+            <!-- Agent report inside drawer -->
+            <div style="margin-top:16px">
+              <div class="card-title" style="margin-bottom:8px">Agent Report</div>
+              <pre id="prep-report" style="white-space:pre-wrap;color:var(--tx2);font-size:12px;line-height:1.45;margin:0"></pre>
+            </div>
+
+          </div><!-- /.settings-drawer-body -->
+        </div><!-- /.settings-drawer -->
+
+      </div><!-- /.tab-main -->
+    </div><!-- /.tab-layout -->
+  </div><!-- /#prep-content -->
 </div>
 <!-- END TAB 4 -->
 <!-- TAB 5 — RECONCILED FORECAST -->
 <div class="tab-panel" id="panel-4">
   <div class="section-h">Reconciled <em>Forecasting</em></div>
   <p class="section-sub">
-    Forecast across the full hierarchy using explicit order from top to bottom, then reconcile with
-    Bottom-up, Top-down, or Middle-out logic and export forecasts for every level.
+    Forecast across the full hierarchy — Bottom-up, Top-down, or Middle-out — then browse and override any node.
   </p>
 
   <div class="alert alert-info" id="recon-no-data">↑ Upload and confirm a hierarchical dataset in Tab 1 first.</div>
 
   <div id="recon-ready" style="display:none">
-    <div class="card" style="margin-bottom:18px">
-      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
-        <div class="form-group" style="flex:0 0 200px;margin:0">
-          <label class="form-label">Dependent Series</label>
-          <select class="form-control" id="recon-dep-col"></select>
+    <div class="tab-layout">
+
+      <!-- ═══ LEFT SIDEBAR ═══ -->
+      <div class="tab-sidebar">
+        <div class="sidebar-header">⚙ Forecast Controls</div>
+
+        <!-- Dependent series -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Dependent Series</div>
+          <select class="sidebar-series-select" id="recon-dep-col"></select>
         </div>
-        <div class="form-group" style="flex:0 0 170px;margin:0">
-          <label class="form-label">Strategy</label>
-          <select class="form-control" id="recon-strategy" onchange="onReconStrategyChange()">
+
+        <!-- Strategy -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Reconciliation Strategy</div>
+          <select class="sidebar-series-select" id="recon-strategy" onchange="onReconStrategyChange()" style="margin-bottom:8px">
             <option value="bottom_up">Bottom-up</option>
             <option value="top_down">Top-down</option>
             <option value="middle_out">Middle-out</option>
           </select>
+          <div id="recon-middle-wrap" style="display:none;margin-top:6px">
+            <div class="sidebar-section-label">Middle Level</div>
+            <select class="sidebar-series-select" id="recon-middle-level"></select>
+          </div>
         </div>
-        <div class="form-group" style="flex:0 0 180px;margin:0" id="recon-middle-wrap">
-          <label class="form-label">Middle Level</label>
-          <select class="form-control" id="recon-middle-level"></select>
+
+        <!-- Node context strip (shown after results) -->
+        <div class="node-context-strip" id="node-context-strip-recon" style="display:none">
+          <span class="node-context-empty">No node selected</span>
         </div>
-        <div class="form-group" style="flex:0 0 120px;margin:0">
-          <label class="form-label">Horizon</label>
-          <input type="number" class="form-control" id="recon-horizon" value="13" min="1">
+
+        <!-- Node browser (shown after results) -->
+        <div id="recon-node-browser" style="display:none">
+          <div class="hier-nav-panel">
+            <div class="hier-nav-header">🔍 Browse Nodes</div>
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+              <div class="sidebar-section-label">Level</div>
+              <select class="sidebar-series-select" id="recon-level-select" onchange="onReconPreviewLevelChange()" style="margin-bottom:8px"></select>
+              <div class="sidebar-section-label" style="margin-top:6px">Node</div>
+              <select class="sidebar-series-select" id="recon-node-select" onchange="renderReconSelectedNode()"></select>
+            </div>
+            <!-- Tree browser -->
+            <div id="recon-tree-card" style="display:none">
+              <div class="vis-tree-toggle" onclick="toggleReconTree()" id="recon-tree-toggle-btn" style="border-top:none">
+                <span id="recon-tree-icon">▶</span>
+                <span>Visual Tree</span>
+                <span style="margin-left:auto;font-size:10px" id="recon-tree-hint">expand</span>
+              </div>
+              <div class="vis-tree-wrap" id="recon-tree-wrap" style="display:none;max-height:240px">
+                <div id="recon-tree-root"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="form-group" style="flex:0 0 160px;margin:0">
-          <label class="form-label">Interval Mode</label>
-          <select class="form-control" id="recon-interval-mode" onchange="setReconIntervalMode()">
+
+        <!-- Horizon & interval -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Horizon (periods)</div>
+          <input type="number" class="form-control" id="recon-horizon" value="13" min="1" style="font-size:12px;padding:6px 10px;margin-bottom:8px">
+          <div class="sidebar-section-label">Interval</div>
+          <select class="sidebar-series-select" id="recon-interval-mode" onchange="setReconIntervalMode()" style="margin-bottom:6px">
             <option value="session">Use Session Interval</option>
             <option value="manual">Manual Interval</option>
           </select>
-        </div>
-        <div class="form-group" style="flex:0 0 150px;margin:0">
-          <label class="form-label">Manual Interval</label>
-          <select class="form-control" id="recon-target-freq" disabled>
+          <select class="sidebar-series-select" id="recon-target-freq" disabled>
             <option value="D">Daily (D)</option>
             <option value="W">Weekly (W)</option>
             <option value="MS" selected>Monthly (MS)</option>
@@ -1172,188 +1397,184 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
             <option value="AS">Yearly (AS)</option>
           </select>
         </div>
-        <div class="form-group" style="flex:0 0 130px;margin:0">
-          <label class="form-label">Quantity Type</label>
-          <select class="form-control" id="recon-qty-type">
+
+        <!-- Qty & accumulation -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Quantity Type</div>
+          <select class="sidebar-series-select" id="recon-qty-type" style="margin-bottom:8px">
             <option value="flow" selected>Flow</option>
             <option value="stock">Stock</option>
             <option value="rate">Rate</option>
           </select>
-        </div>
-        <div class="form-group" style="flex:0 0 150px;margin:0">
-          <label class="form-label">Accumulation</label>
-          <select class="form-control" id="recon-accum-method">
+          <div class="sidebar-section-label">Accumulation</div>
+          <select class="sidebar-series-select" id="recon-accum-method">
             <option value="auto" selected>Auto</option>
             <option value="sum">Sum</option>
             <option value="mean">Mean</option>
             <option value="last">Last</option>
           </select>
         </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
-        <div style="font-size:12px;color:var(--tx2)" id="recon-hier-order-note"></div>
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2)"><input type="checkbox" id="recon-neg-allowed"> Allow negative forecast</label>
-          <div class="radio-pills">
-            <div class="radio-pill"><input type="radio" name="recon-out-fmt" id="recon-out-excel" value="excel" checked><label for="recon-out-excel">Excel</label></div>
-            <div class="radio-pill"><input type="radio" name="recon-out-fmt" id="recon-out-csv" value="csv"><label for="recon-out-csv">CSV Bundle</label></div>
-          </div>
-          <button class="btn btn-primary" onclick="runReconciledForecast()">▶ Run Reconciled Forecast</button>
-        </div>
-      </div>
-    </div>
 
-    <div id="recon-loader" style="display:none" class="loader-wrap">
-      <div class="spinner"></div><span class="loader-text" id="recon-loader-msg">Computing reconciled forecasts...</span>
-    </div>
+        <!-- Options -->
+        <div class="sidebar-section">
+          <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--tx2);cursor:pointer">
+            <input type="checkbox" id="recon-neg-allowed"> Allow negative forecast
+          </label>
+          <div style="margin-top:10px">
+            <div class="sidebar-section-label">Export Format</div>
+            <div class="radio-pills">
+              <div class="radio-pill"><input type="radio" name="recon-out-fmt" id="recon-out-excel" value="excel" checked><label for="recon-out-excel">Excel</label></div>
+              <div class="radio-pill"><input type="radio" name="recon-out-fmt" id="recon-out-csv" value="csv"><label for="recon-out-csv">CSV</label></div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:var(--tx2)" id="recon-hier-order-note"></div>
+        </div>
 
-    <div id="recon-results" style="display:none">
-      <div class="grid-4" id="recon-stats-row" style="margin-bottom:16px"></div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Preview Selector</div>
-        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-          <div class="form-group" style="flex:0 0 180px;margin:0">
-            <label class="form-label">Level</label>
-            <select class="form-control" id="recon-level-select" onchange="onReconPreviewLevelChange()"></select>
-          </div>
-          <div class="form-group" style="flex:1;margin:0">
-            <label class="form-label">Node</label>
-            <select class="form-control" id="recon-node-select" onchange="renderReconSelectedNode()"></select>
+        <!-- Run button -->
+        <div class="sidebar-section sidebar-run-section">
+          <button class="sidebar-run-btn" onclick="runReconciledForecast()">▶ Run Reconciled Forecast</button>
+          <div id="recon-loader" style="display:none;margin-top:10px" class="loader-wrap">
+            <div class="spinner"></div><span class="loader-text" id="recon-loader-msg">Computing…</span>
           </div>
         </div>
-      </div>
-      <div class="card" id="recon-tree-card" style="display:none;margin-bottom:16px">
-        <div class="card-title">Tree Browser</div>
-        <div class="vis-tree-toggle" onclick="toggleReconTree()" id="recon-tree-toggle-btn" style="padding:8px 0;border-top:none">
-          <span id="recon-tree-icon">▶</span>
-          <span>Browse forecast nodes as a tree</span>
-          <span style="margin-left:auto;font-size:10px" id="recon-tree-hint">click to expand</span>
-        </div>
-        <div class="vis-tree-wrap" id="recon-tree-wrap" style="display:none;max-height:320px;padding:6px 0 0 0">
-          <div id="recon-tree-root"></div>
-        </div>
-      </div>
-      <div id="recon-detail-grid">
-      <div class="card fc-only-card" id="recon-chart-card" style="margin-bottom:0">
-        <div id="recon-chart-toolbar">
-          <div class="chart-title" style="margin-bottom:0">
-          <span>Selected Node Timeline<span id="recon-fc-only-badge">FORECAST VIEW</span></span>
+      </div><!-- /sidebar -->
+
+      <!-- ═══ MAIN CONTENT ═══ -->
+      <div class="tab-main">
+
+        <!-- Stat bar -->
+        <div class="stat-bar" id="recon-stats-row" style="display:none"></div>
+
+        <!-- Results region -->
+        <div class="results-region">
+
+          <!-- Empty state -->
+          <div class="results-placeholder" id="recon-empty-state">
+            <div class="results-placeholder-icon">🏗</div>
+            <div class="results-placeholder-text">Configure strategy and run to see reconciled forecasts</div>
+            <div class="results-placeholder-sub">Node timeline, family context and override table will appear here</div>
           </div>
-          <div id="recon-chart-controls">
-            <label class="fc-only-toggle fc-active" id="recon-base-toggle-btn" title="Overlay the raw model forecast before hierarchy reconciliation" style="border-color:rgba(16,185,129,.35)">
-              <input type="checkbox" class="fc-chk" id="recon-base-chk" checked onchange="toggleReconBaseForecast(this.checked)">
-              <span style="color:var(--a3)">📊 Show Base Forecast</span>
-            </label>
-          <label class="fc-only-toggle" id="recon-override-toggle-btn" title="Open the selected node override editor">
-            <input type="checkbox" class="fc-chk" id="recon-add-overrides" onchange="toggleOverrideTable(this.checked)">
-            <span>✍ Add Overrides</span>
-          </label>
-          <label class="fc-only-toggle" id="recon-fc-only-toggle-btn" title="Hide history and zoom into the forecast window only">
-            <input type="checkbox" class="fc-chk" id="recon-fc-only-chk" onchange="toggleReconForecastOnly(this.checked)">
-            <span>🔭 Show Forecast Only</span>
-          </label>
-        </div>
-        </div>
-        <div id="recon-chart-legend"></div>
-        <div id="recon-chart-viewport">
-          <canvas id="recon-chart" height="180"></canvas>
-        </div>
-        <div id="recon-chart-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
-      </div>
-      <div class="card" id="recon-override-card">
-        <div class="override-card-head">
-          <div>
-            <div class="card-title" style="margin-bottom:3px">Override Forecast</div>
-            <div class="override-card-sub" id="recon-override-subtitle">Selected node override editor</div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" onclick="clearReconOverridesForNode()">Clear Node Overrides</button>
-            <button class="btn btn-primary btn-sm" onclick="runReconcileOverrides()">▶ Reconcile Overrides</button>
-          </div>
-        </div>
-        <div class="override-legend">
-          <span>🔴 Highlighted dates</span> indicate overrides already applied to the selected node.
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-          <span id="recon-override-selection-info" style="font-size:12px;color:var(--tx2);margin-right:4px">Select baseline or reconciled cells</span>
-          <input type="number" class="form-control" id="recon-override-toolbar-value" placeholder="% or value" style="width:120px">
-          <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('pct')">Apply %</button>
-          <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('manual')">Set Value</button>
-          <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('clear')">Clear</button>
-        </div>
-        <div class="override-transposed-wrap" id="recon-override-table">
-          <table class="override-table">
-            <tbody id="recon-override-body"></tbody>
-          </table>
-        </div>
-        <div id="recon-override-info" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
-      </div>
-      </div>
-      <!-- ═══ FAMILY CONTEXT CHART — new card, existing chart above is untouched ═══ -->
-      <div class="card" id="recon-family-card" style="margin-bottom:16px;display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
-          <div>
-            <div class="card-title" style="margin-bottom:3px">
-              Family Context — Reconciled vs Base Model Forecast
+
+          <!-- Results -->
+          <div id="recon-results" style="display:none">
+
+            <!-- ── Node chart + override ── -->
+            <div id="recon-detail-grid">
+              <div class="card fc-only-card" id="recon-chart-card" style="margin-bottom:14px">
+                <div id="recon-chart-toolbar">
+                  <div class="chart-title" style="margin-bottom:0">
+                    <span>Selected Node Timeline<span id="recon-fc-only-badge">FORECAST VIEW</span></span>
+                  </div>
+                  <div id="recon-chart-controls">
+                    <label class="fc-only-toggle fc-active" id="recon-base-toggle-btn" style="border-color:rgba(16,185,129,.35)">
+                      <input type="checkbox" class="fc-chk" id="recon-base-chk" checked onchange="toggleReconBaseForecast(this.checked)">
+                      <span style="color:var(--a3)">📊 Base Forecast</span>
+                    </label>
+                    <label class="fc-only-toggle" id="recon-override-toggle-btn">
+                      <input type="checkbox" class="fc-chk" id="recon-add-overrides" onchange="toggleOverrideTable(this.checked)">
+                      <span>✍ Overrides</span>
+                    </label>
+                    <label class="fc-only-toggle" id="recon-fc-only-toggle-btn">
+                      <input type="checkbox" class="fc-chk" id="recon-fc-only-chk" onchange="toggleReconForecastOnly(this.checked)">
+                      <span>🔭 Forecast Only</span>
+                    </label>
+                  </div>
+                </div>
+                <div id="recon-chart-legend"></div>
+                <div id="recon-chart-viewport"><canvas id="recon-chart" height="180"></canvas></div>
+                <div id="recon-chart-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
+              </div>
+
+              <div class="card" id="recon-override-card">
+                <div class="override-card-head">
+                  <div>
+                    <div class="card-title" style="margin-bottom:3px">Override Forecast</div>
+                    <div class="override-card-sub" id="recon-override-subtitle">Selected node override editor</div>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <button class="btn btn-ghost btn-sm" onclick="clearReconOverridesForNode()">Clear Node Overrides</button>
+                    <button class="btn btn-primary btn-sm" onclick="runReconcileOverrides()">▶ Reconcile Overrides</button>
+                  </div>
+                </div>
+                <div class="override-legend"><span>🔴 Highlighted dates</span> indicate overrides already applied.</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+                  <span id="recon-override-selection-info" style="font-size:12px;color:var(--tx2);margin-right:4px">Select baseline or reconciled cells</span>
+                  <input type="number" class="form-control" id="recon-override-toolbar-value" placeholder="% or value" style="width:120px">
+                  <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('pct')">Apply %</button>
+                  <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('manual')">Set Value</button>
+                  <button class="btn btn-ghost btn-sm" onclick="applyOverrideToolbarAction('clear')">Clear</button>
+                </div>
+                <div class="override-transposed-wrap" id="recon-override-table">
+                  <table class="override-table"><tbody id="recon-override-body"></tbody></table>
+                </div>
+                <div id="recon-override-info" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
+              </div>
+            </div><!-- /#recon-detail-grid -->
+
+            <!-- Family context chart -->
+            <div class="card" id="recon-family-card" style="margin-bottom:14px;display:none">
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+                <div>
+                  <div class="card-title" style="margin-bottom:3px">Family Context — Reconciled vs Base</div>
+                  <div style="font-size:12px;color:var(--tx2)" id="recon-family-subtitle">Selected node · ancestors · direct children</div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <label class="fc-only-toggle" id="recon-family-fc-btn">
+                    <input type="checkbox" class="fc-chk" id="recon-family-fc-chk" onchange="toggleFamilyForecastOnly(this.checked)">
+                    <span>🔭 Forecast Only</span>
+                  </label>
+                  <button class="btn btn-ghost btn-sm" onclick="toggleFamilyLegend(true)">Show All</button>
+                  <button class="btn btn-ghost btn-sm" onclick="toggleFamilyLegend(false)">Hide All</button>
+                </div>
+              </div>
+              <div class="family-legend" id="recon-family-legend"></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+                <div>
+                  <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">📊 Base Model <span style="color:var(--tx3);font-weight:400">(pre-recon)</span></div>
+                  <canvas id="recon-family-base-chart" height="200"></canvas>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">✅ Reconciled <span style="color:var(--tx3);font-weight:400">(post-recon)</span></div>
+                  <canvas id="recon-family-recon-chart" height="200"></canvas>
+                </div>
+                <div id="recon-family-override-panel" style="display:none">
+                  <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">✍ Override <span style="color:var(--tx3);font-weight:400">(post-override)</span></div>
+                  <canvas id="recon-family-override-chart" height="200"></canvas>
+                </div>
+              </div>
+              <div id="recon-family-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
             </div>
-            <div style="font-size:12px;color:var(--tx2)" id="recon-family-subtitle">
-              Selected node · ancestors · direct children
+
+            <!-- Node summary table -->
+            <div class="result-section-head">Node Summary</div>
+            <div class="tbl-wrap" id="recon-node-summary" style="max-height:240px;overflow:auto;margin-bottom:14px"></div>
+
+            <!-- Export bar -->
+            <div class="export-bar">
+              <span class="export-bar-label" id="recon-export-info">Ready to export</span>
+              <button class="btn btn-download" onclick="downloadReconciledForecast()">⬇ Download Reconciled Forecasts</button>
             </div>
+
+          </div><!-- /#recon-results -->
+        </div><!-- /.results-region -->
+
+        <!-- ── SETTINGS DRAWER ── -->
+        <div class="settings-drawer" id="recon-settings-drawer">
+          <div class="settings-drawer-header" onclick="toggleDrawer('recon-settings-drawer')">
+            <span class="settings-drawer-title">📋 Forecast Preview &amp; Report</span>
+            <span class="settings-drawer-chevron">▲</span>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <!-- Forecast-only toggle specific to this chart -->
-            <label class="fc-only-toggle" id="recon-family-fc-btn" title="Show forecast window only">
-              <input type="checkbox" class="fc-chk" id="recon-family-fc-chk" onchange="toggleFamilyForecastOnly(this.checked)">
-              <span>🔭 Forecast Only</span>
-            </label>
-            <button class="btn btn-ghost btn-sm" onclick="toggleFamilyLegend(true)">Show All</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleFamilyLegend(false)">Hide All</button>
+          <div class="settings-drawer-body">
+            <div class="card-title" style="margin-bottom:8px">Future Forecast Preview</div>
+            <div class="tbl-wrap" id="recon-forecast-preview" style="max-height:240px;overflow:auto;margin-bottom:16px"></div>
+            <div class="card-title" style="margin-bottom:8px">Reconciliation Report</div>
+            <pre id="recon-report" style="white-space:pre-wrap;color:var(--tx2);font-size:12px;line-height:1.45;margin:0"></pre>
           </div>
         </div>
-        <!-- Interactive legend -->
-        <div class="family-legend" id="recon-family-legend"></div>
-        <!-- Side-by-side: Base Model (left) | Reconciled (right) -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
-              📊 Base Model Forecast <span style="color:var(--tx3);font-weight:400">(pre-reconciliation)</span>
-            </div>
-            <canvas id="recon-family-base-chart" height="200"></canvas>
-          </div>
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
-              ✅ Reconciled Forecast <span style="color:var(--tx3);font-weight:400">(post-reconciliation)</span>
-            </div>
-            <canvas id="recon-family-recon-chart" height="200"></canvas>
-          </div>
-          <div id="recon-family-override-panel" style="display:none">
-            <div style="font-size:11px;font-weight:600;color:var(--tx2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">
-              ✍ Override Forecast <span style="color:var(--tx3);font-weight:400">(post-override)</span>
-            </div>
-            <canvas id="recon-family-override-chart" height="200"></canvas>
-          </div>
-        </div>
-        <div id="recon-family-meta" style="margin-top:10px;font-size:12px;color:var(--tx2)"></div>
-      </div>
-        <div class="tbl-wrap" id="recon-node-summary" style="max-height:260px;overflow:auto"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Future Forecast Preview</div>
-        <div class="tbl-wrap" id="recon-forecast-preview" style="max-height:260px;overflow:auto"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Reconciliation Report</div>
-        <pre id="recon-report" style="white-space:pre-wrap;color:var(--tx2);font-size:12px;line-height:1.45;margin:0"></pre>
-      </div>
-      <div class="card">
-        <div class="card-title">Export</div>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-download btn-lg" onclick="downloadReconciledForecast()">⬇ Download Reconciled Forecasts</button>
-          <span id="recon-export-info" style="font-size:12px;color:var(--tx2)"></span>
-        </div>
-      </div>
-    </div>
-  </div>
+
+      </div><!-- /.tab-main -->
+    </div><!-- /.tab-layout -->
+  </div><!-- /#recon-ready -->
 </div>
 <!-- END TAB 5 -->
 <!-- ═══════════════ TAB 5 — LEVEL STABILITY ═══════════════ -->
@@ -1496,8 +1717,7 @@ input[type=range]{width:100%;accent-color:var(--a1);cursor:pointer}
     </div><!-- /#stab-results -->
   </div><!-- /#stab-ready -->
 </div>
-<!-- END TAB 5 -->
-</main>
+<!-- END TAB 6 (Level Stability) -->
 <div id="toast-container"></div>
 <script>
 // ════════════════════════════════════════════════════════════
@@ -1849,14 +2069,13 @@ function setAnalyzeMode(mode) {
   S.analyzeMode=mode;
   const sb=document.getElementById('mode-single-btn');
   const hb=document.getElementById('mode-hier-btn');
+  // update mode pills
+  if(sb) { sb.classList.toggle('active', mode==='single'); }
+  if(hb) { hb.classList.toggle('active', mode==='hierarchy'); }
   if(mode==='single'){
-    sb.style.background='var(--a1)'; sb.style.color='#fff';
-    hb.style.background='transparent'; hb.style.color='var(--tx2)';
-    show('single-controls','flex'); hide('hier-node-controls'); hide('hier-tree-section');
+    show('single-controls'); hide('hier-node-controls');
   } else {
-    hb.style.background='var(--a4)'; hb.style.color='#fff';
-    sb.style.background='transparent'; sb.style.color='var(--tx2)';
-    hide('single-controls'); show('hier-node-controls'); show('hier-tree-section');
+    hide('single-controls'); show('hier-node-controls');
     loadHierarchyTree();
   }
 }
@@ -2069,10 +2288,14 @@ function updateBreadcrumb(path) {
   const entries=Object.entries(path);
   if(!entries.length){
     el.innerHTML='<span style="color:var(--tx3);font-size:12px">No node selected</span>';
-    hide('node-meta-row'); return;
+    hide('node-meta-row');
+    updateNodeContextStrip('node-context-strip-analyze', {});
+    return;
   }
   const parts=entries.map(([k,v])=>`<span class="crumb">${k}: ${v}</span>`).join('<span class="crumb-sep">›</span>');
   el.innerHTML=parts;
+  // also update sidebar context strip
+  updateNodeContextStrip('node-context-strip-analyze', path);
 
   // meta row: depth + leaf/aggregate
   const depth=entries.length;
@@ -2087,7 +2310,7 @@ function updateBreadcrumb(path) {
     show('node-meta-row','flex');
   }
 
-  // node preview panel
+  // node preview panel (removed from sidebar in new layout — graceful no-op if absent)
   const preEl=document.getElementById('node-summary-pre');
   if(preEl){
     const pathStr=entries.map(([k,v])=>`<strong style="color:var(--a1)">${k}</strong>=<strong style="color:var(--tx)">${v}</strong>`).join(' › ');
@@ -2236,7 +2459,9 @@ async function runAnalysis() {
       });
     }
     renderAnalysis(r);
-    show('analyze-results');
+    revealAnalyzeResults();
+    // update node context strip in sidebar
+    if(S.analyzeMode==='hierarchy') updateNodeContextStrip('node-context-strip-analyze', S.currentNodePath||{});
     toast('Analysis complete ✓','ok');
   } catch(e){
     toast(`Analysis failed: ${e.message}`,'err');
@@ -2392,21 +2617,16 @@ async function initPrepTab(){
   await loadSeriesList();
   await setPrepMode(S.isHierarchy ? 'hierarchy' : 'single');
   setPrepIntervalMode();
+  // open settings drawer by default (no results yet)
+  openDrawer('prep-settings-drawer');
 }
 
 async function setPrepMode(mode){
   S.prepMode = (mode === 'hierarchy' && S.isHierarchy) ? 'hierarchy' : 'single';
   const sb=document.getElementById('prep-mode-single-btn');
   const hb=document.getElementById('prep-mode-hier-btn');
-  if(sb && hb){
-    if(S.prepMode === 'single'){
-      sb.className='btn btn-primary';
-      hb.className='btn btn-secondary';
-    } else {
-      hb.className='btn btn-primary';
-      sb.className='btn btn-secondary';
-    }
-  }
+  if(sb) { sb.classList.toggle('active', S.prepMode==='single'); }
+  if(hb) { hb.classList.toggle('active', S.prepMode==='hierarchy'); }
   if(S.prepMode === 'hierarchy' && S.isHierarchy){
     show('prep-hier-wrap');
     // sync total-leaves chip from Analyzer tree if already loaded
@@ -2517,13 +2737,14 @@ function updatePrepBreadcrumb(path){
   if(!entries.length){
     el.innerHTML='<span style="color:var(--tx3);font-size:12px">No node selected</span>';
     hide('prep-node-meta-row');
-    const pre=document.getElementById('prep-node-summary-pre');
-    if(pre) pre.innerHTML='<span style="color:var(--tx3)">Select a node from the tree or dropdowns to preview it.</span>';
+    updateNodeContextStrip('node-context-strip-prep', {});
     const note=document.getElementById('prep-hier-note');
     if(note) note.textContent='Choose one or more hierarchy levels. Leave lower levels as All to prepare an aggregated forecast.';
     return;
   }
   el.innerHTML=entries.map(([k,v])=>`<span class="crumb">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join('<span class="crumb-sep">›</span>');
+  // also update sidebar context strip
+  updateNodeContextStrip('node-context-strip-prep', path);
 
   const depth=entries.length;
   const total=S.hierLevels.length;
@@ -2539,21 +2760,13 @@ function updatePrepBreadcrumb(path){
     show('prep-node-meta-row','flex');
   }
 
-  // node summary panel
-  const preEl=document.getElementById('prep-node-summary-pre');
-  if(preEl){
-    const pathStr=entries.map(([k,v])=>`<strong style="color:var(--a1)">${escapeHtml(k)}</strong>=<strong style="color:var(--tx)">${escapeHtml(v)}</strong>`).join(' › ');
-    preEl.innerHTML=`<div style="margin-bottom:10px;font-size:13px;color:var(--tx2);line-height:1.8">${pathStr}</div>
-      <div style="font-size:12px;color:var(--tx3)">${isLeaf?'Leaf node — raw series will be prepared directly':'Aggregate node — child series will be aggregated before preparation'}</div>`;
-  }
-
   // aggregation note
   const note=document.getElementById('prep-hier-note');
   if(note){
     const parts=entries.map(([k,v])=>`${k}=${v}`);
     note.textContent=isLeaf
-      ? `Selected leaf node: ${parts.join(' > ')}`
-      : `Selected aggregate node: ${parts.join(' > ')} — lower levels will be aggregated`;
+      ? `Leaf node: ${parts.join(' > ')}`
+      : `Aggregate node: ${parts.join(' > ')} — lower levels aggregated`;
   }
 }
 
@@ -2741,7 +2954,9 @@ async function runForecastPrep(){
       enable_combination_models:document.getElementById('prep-combo-models')?.checked??false,
     });
     renderForecastPrepResults(r);
-    show('prep-results');
+    revealPrepResults();
+    // update node context strip in sidebar
+    if(S.prepMode==='hierarchy') updateNodeContextStrip('node-context-strip-prep', S.prepNodePath||{});
     toast('Forecast preparation complete','ok');
   }catch(e){
     toast(`Forecast prep failed: ${e.message}`,'err');
@@ -3124,6 +3339,7 @@ function renderTimelineChart(result){
     },
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       animation:{duration:350},
       plugins:{
         legend:{
@@ -3428,6 +3644,68 @@ function renderCCFCard(col, cd, r) {
 // ════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// SETTINGS DRAWER TOGGLE
+// ══════════════════════════════════════════════════════════
+function toggleDrawer(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('open');
+}
+
+// Open drawer by default when no results exist; collapse when results appear
+function openDrawer(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+function closeDrawer(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+
+// ── Reveal helpers for the 3-zone layout ──────────────────
+function revealAnalyzeResults() {
+  hide('analyze-empty-state');
+  show('analyze-results');
+  const bar = document.getElementById('analyze-stats-row');
+  if (bar) bar.style.display = 'grid';
+}
+
+function revealPrepResults() {
+  hide('prep-empty-state');
+  show('prep-results');
+  const bar = document.getElementById('prep-stats-row');
+  if (bar) bar.style.display = 'grid';
+  // collapse settings drawer once results are in
+  closeDrawer('prep-settings-drawer');
+  const badge = document.getElementById('prep-settings-badge');
+  if (badge) badge.textContent = 'EDIT';
+  const drawer = document.getElementById('prep-settings-drawer');
+  if (drawer) drawer.classList.remove('needs-run');
+}
+
+function revealReconResults() {
+  hide('recon-empty-state');
+  show('recon-results');
+  const bar = document.getElementById('recon-stats-row');
+  if (bar) bar.style.display = 'grid';
+  // show the node browser in sidebar
+  show('recon-node-browser');
+  show('node-context-strip-recon');
+}
+
+// Update node context strip (sidebar breadcrumb chip strip)
+function updateNodeContextStrip(stripId, path) {
+  const el = document.getElementById(stripId);
+  if (!el) return;
+  const entries = Object.entries(path || {});
+  if (!entries.length) {
+    el.innerHTML = '<span class="node-context-empty">No node selected</span>';
+    return;
+  }
+  el.innerHTML = entries.map(([k,v]) => `<span class="crumb" style="font-size:10px">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join('<span class="crumb-sep" style="font-size:10px">›</span>');
+}
+
 checkApiStatus();
 
 const RECON = {
@@ -3453,6 +3731,8 @@ function initReconTab() {
     show('recon-no-data'); hide('recon-ready'); return;
   }
   hide('recon-no-data'); show('recon-ready');
+  // node browser only shown after run
+  hide('recon-node-browser'); hide('node-context-strip-recon');
   const depSel=document.getElementById('recon-dep-col');
   if(depSel){
     const dep=(S.depCols&&S.depCols.length?S.depCols:(S.valueCols||[]));
@@ -3511,7 +3791,7 @@ async function runReconciledForecast() {
     RECON.selectedNodeId=r.default_node_id||null;
     renderReconResults(r);
     populateOverrideTable(r.forecast_preview||[]);
-    show('recon-results');
+    revealReconResults();
     toast(`Reconciled forecast complete — ${r.n_total_nodes} nodes`,'ok');
   } catch(e) {
     toast(`Reconciled forecast failed: ${e.message}`,'err');
@@ -3697,6 +3977,11 @@ function renderReconSelectedNode() {
   RECON.selectedNodeId = nodeId;
   const nodeSel = document.getElementById('recon-node-select');
   if (nodeSel && nodeSel.value !== nodeId) nodeSel.value = nodeId;
+  // Update the sidebar context strip with the selected node's display path
+  const meta=(RECON.result.preview_nodes||[]).find(n=>n.node_id===nodeId)||{};
+  const displayLabel = meta.display_path || meta.label || nodeId;
+  const ctxEl = document.getElementById('node-context-strip-recon');
+  if(ctxEl) ctxEl.innerHTML=`<span class="crumb" style="font-size:10px">${escapeHtml(displayLabel)}</span>`;
   const preview=(RECON.result.node_previews||{})[nodeId];
   if(!preview){
     destroyChart('recon-chart');
@@ -3704,7 +3989,6 @@ function renderReconSelectedNode() {
     setHtml('recon-chart-meta','Selected node is not available in the preview payload. Use the export for the full hierarchy.');
     return;
   }
-  const meta=(RECON.result.preview_nodes||[]).find(n=>n.node_id===nodeId)||{};
 
   const forecastOnly = !!S.reconForecastOnly;
   const showBase     = !!S.reconShowBase;
